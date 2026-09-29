@@ -166,7 +166,7 @@ real failures:
 | `does not provide an export named` | error | Usually a stale copy of the mod is loading instead of your edits |
 | `No registered handler for 'x (ReplaceUIScript)'` | warn | A Civ VI action verb; the Civ VII loader has none, so the group does nothing |
 | `No registered handler for 'x (UpdateText)'` | noise | A valid verb not handled in this scope; official content logs it too |
-| `There were issues loading '…'` | warn | One bad row, such as a duplicate LOC tag, can drop a whole text file |
+| `There were issues loading '<file>'` | warn | One bad row, such as a duplicate LOC tag, can drop a whole text file |
 | SQLite constraint failures | error | A database action was rejected |
 | `Failed loading resource:` | warn | A missing asset; the base game logs some of these itself |
 | Uncaught / TypeError / ReferenceError | error | A script threw |

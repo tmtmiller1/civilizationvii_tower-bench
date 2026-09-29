@@ -555,7 +555,7 @@ async function run() {
   if (!code) return;
   const lang = document.querySelector("input[name=lang]:checked").value;
   const t0 = performance.now();
-  $("run-meta").textContent = "running…";
+  $("run-meta").textContent = "running...";
   try {
     const out = lang === "sql" ? sqlTable(await api("/api/sql", { sql: code })) : tree((await api("/api/eval", { code })).value);
     $("output").replaceChildren(out);
@@ -857,7 +857,7 @@ $("snap-take").addEventListener("click", async () => {
 $("diff-run").addEventListener("click", async () => {
   const a = $("diff-a").value;
   if (!a) return toast("Take a snapshot first.", true);
-  $("diff-out").textContent = "diffing…";
+  $("diff-out").textContent = "diffing...";
   try {
     const r = await api(`/api/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent($("diff-b").value)}`);
     $("diff-out").textContent = r.text;
@@ -959,7 +959,7 @@ $("dep-plan").addEventListener("click", async () => {
 });
 $("dep-go").addEventListener("click", async () => {
   $("dep-go").disabled = true;
-  $("deploy").append(h("p", { class: "muted" }, "copying and watching the game…"));
+  $("deploy").append(h("p", { class: "muted" }, "copying and watching the game..."));
   try { renderPlan(await api("/api/deploy", { dir: $("dep-dir").value.trim() })); } catch (e) { toast(e.message, true); }
 });
 $("dep-prove").addEventListener("click", async () => {
@@ -976,7 +976,7 @@ try { $("dep-dir").value = localStorage.getItem("tb-dep-dir") ?? ""; } catch {}
 
 // UI lint
 $("lint-run").addEventListener("click", async () => {
-  $("lint-meta").textContent = "walking the live UI…";
+  $("lint-meta").textContent = "walking the live UI...";
   try {
     const r = await api(`/api/lint?scope=${encodeURIComponent($("lint-scope").value.trim())}`);
     if (r.error) throw new Error(r.error);

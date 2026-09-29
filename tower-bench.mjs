@@ -116,7 +116,7 @@ async function localPlayer() {
 
 function printWrite(r) {
   const timing = r.verdict === "LANDED" ? ` in ${r.landedMs} ms` : r.verdict === "NO EFFECT" ? ` (waited ${r.waitedMs} ms)` : "";
-  out(`${r.undid ? `undo of: ${r.undid}\n` : ""}${r.description ?? ""}: ${r.verdict}${timing}${r.reason ? ` — ${r.reason}` : ""}`);
+  out(`${r.undid ? `undo of: ${r.undid}\n` : ""}${r.description ?? ""}: ${r.verdict}${timing}${r.reason ? `: ${r.reason}` : ""}`);
   if (r.sent) out(`  engine returned ${JSON.stringify(r.returned)}${r.canStart !== undefined ? `, canStart ${JSON.stringify(r.canStart)}` : ""} (neither proves anything)`);
   for (const h of r.hints ?? []) out(`  note: ${h}`);
   if (r.inverse) out(`  undo with: tower-bench undo --yes`);
@@ -142,7 +142,7 @@ async function smoke(tokens) {
   // Unit rows are age-specific, so take a scout-like unit from the loaded game rather than hardcoding one.
   const unit = cat.units.find((u) => /SCOUT|EXPLORER/.test(u.type))?.type ?? cat.units[0].type;
   const steps = [{ op: "unit.place", args: { ...at, owner, type: unit } }];
-  // Terrain round-trips (watched here and in the canals probe). Features are left out: on some plots a
+  // Terrain round-trips (watched 2026-09-26). Features are left out: on some plots a
   // placement is deferred (watched 2026-09-26), which would leave the plot changed after the undo.
   const swap = { TERRAIN_FLAT: "TERRAIN_HILL", TERRAIN_HILL: "TERRAIN_FLAT" }[plot.terrain];
   if (swap) steps.push({ op: "terrain.set", args: { ...at, type: swap } });
@@ -516,7 +516,7 @@ async function main() {
       for (const [rule, list] of byRule) {
         out(`${rule} (${list.length}): ${list[0].detail}`);
         for (const i of list.slice(0, 8)) out(`    ${i.path}`);
-        if (list.length > 8) out(`    … ${list.length - 8} more`);
+        if (list.length > 8) out(`    ... ${list.length - 8} more`);
       }
       return out(`${r.issues.length} issue(s) in ${r.visited} element(s)${r.truncated ? " (stopped at the element limit)" : ""}`);
     }
