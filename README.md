@@ -13,6 +13,47 @@ node tower-bench.mjs --help                         # every command
 No dependencies. It talks to the game's UI debugger (Chrome DevTools Protocol on port 9444) with Node's built-in
 `WebSocket`, and reads `Mods.sqlite` through the `sqlite3` CLI that ships with macOS.
 
+## Screenshots
+
+Every image below is the bench in use on a real game (1.5.0, a seeded Play Now game started by `lab start`, nine turns
+in), captured on 2026-09-29.
+
+![The Map tab: the live world as hexes, with changes since turn 1 outlined and a verified terrain write](docs/screenshots/map.png)
+
+The Map tab: territory gained since turn 1 outlined in red, new units ringed in green, and a terrain write that was
+re-read until it `LANDED` in 56 ms.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/world-diff.png" alt="World diff between two snapshots"><br>World diff: turn 5 to turn 9 in words.</td>
+<td width="50%"><img src="docs/screenshots/events.png" alt="Live engine events"><br>Events: the engine's own events, live, with readable names.</td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/watches.png" alt="Watches and an invariant sampled per turn"><br>Watches sampled once per turn, and an invariant that holds.</td>
+<td><img src="docs/screenshots/console.png" alt="Console describing an engine object"><br>Console: an engine object described, methods included.</td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/mods.png" alt="Mods tab filtered by author"><br>Mods: which copy of each mod is live, filtered by author.</td>
+<td><img src="docs/screenshots/deploy.png" alt="Deploy proof"><br>Deploy: proof that the game serves your source.</td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/logs.png" alt="Classified log lines"><br>Logs: every line classified and explained.</td>
+<td><img src="docs/screenshots/lint.png" alt="UI lint results"><br>UI lint: GameFace failures in the running UI.</td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/evidence.png" alt="Evidence log"><br>Evidence: everything the bench did, and what the game did back.</td>
+<td><img src="docs/screenshots/cli-writes.png" alt="CLI writes with verdicts"><br>The CLI: a unit sent to a coast plot comes back <code>NO EFFECT</code>, although the engine returned <code>true</code>.</td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/cli-smoke.png" alt="Smoke test and turn rolls"><br><code>smoke</code> and <code>lab turns</code>: every write and its undo, then four turns without Autoplay.</td>
+<td><img src="docs/screenshots/cli-diff.png" alt="World diff in the terminal"><br><code>diff</code>: what four AI turns changed.</td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/cli-lint.png" alt="Deploy proof and lint in the terminal"><br><code>deploy --prove</code> and <code>lint</code> from the terminal.</td>
+<td><img src="docs/screenshots/cli-mods.png" alt="Mods filtered by author in the terminal"><br><code>mods --filter</code>: duplicate copies and enabled probes flagged.</td>
+</tr>
+</table>
+
 ## Requirements
 
 - Node 22 or later.
@@ -171,6 +212,8 @@ change is read back from `Mods.sqlite` (`LANDED`, `NO EFFECT` or `ALREADY`), rec
 like a map write. `live` is the fix for two enabled copies of one id; `on` never enables a second copy. A flag the game
 left empty (`NULL`, shown as "default") is only replaced when you change that copy, and undo puts `NULL` back rather
 than guessing 0 or 1: the game uses it for more than one state. Official content is left to the game's add-ons screen.
+A mod folder the game has not registered yet (new, or put back after being moved out) cannot be switched until the game
+has launched once: the game registers it enabled at that launch.
 
 `logs` tails `UI.log`, `Modding.log`, `Database.log` and `Scripting.log` and classifies lines against signatures from
 real failures:
@@ -231,9 +274,9 @@ your files are restored after every game.
 
 ## Safety
 
-- Map writes (place, remove, set, undo) and mod switches are disarmed until armed in the UI or confirmed with `--yes` on the CLI. The
-  console, watches and deploy are not gated by arming: the console runs whatever JavaScript you give it in the game,
-  and deploy copies files and reloads the game's UI. The SQL console refuses anything but a single read.
+- Map writes (place, remove, set, undo) and mod switches are disarmed until armed in the UI or confirmed with `--yes` on
+  the CLI. The console, watches and deploy are not gated by arming: the console runs whatever JavaScript you give it in
+  the game, and deploy copies files and reloads the game's UI. The SQL console refuses anything but a single read.
 - Every player id is resolved through `Players.get` before a request is sent: an invalid id passed to some engine
   calls segfaults the game.
 - The server binds to `127.0.0.1` only, refuses any other `Host` header, refuses a `POST` without an
@@ -315,9 +358,18 @@ On Windows the user directory defaults to `%LOCALAPPDATA%\Firaxis Games\Sid Meie
   the UI files that differ on disk (read over XHR; GameFace has no `fetch`). A real deploy copied a changed file,
   reloaded the UI itself, served the new bytes, and the new code's marker was live in the page on the same turn.
 
-**NOT verified yet:** the `lab run` command as a whole (its parts ran inside bisect), and the Windows default paths.
-The code was restructured for 0.1.0 after the live runs above (every function kept its engine calls and their
-order, checked against the original side by side on a fake engine); the in-game paths have not been re-watched since.
+**Watched live again, 2026-09-29, game 1.5.0, after the 0.1.0 restructure:** the lab started a seeded game hands-free
+with a chosen set of mods, and `Modding.log` listed exactly those mods as applied, so registry flags written the way the
+Mods tab writes them take effect at launch. `smoke` landed a unit placement, a terrain change and both undos in 53 to 66
+ms and left the plot as it was. A town, a unit and a terrain change landed; a land unit sent to a coast plot came back
+`NO EFFECT` while the engine returned `true`. `lab turns` rolled eight turns without Autoplay. Snapshots and diffs,
+watches sampled per turn, the event stream, the console, deploy `--prove`, lint, logs and the Mods tab all ran on that
+game; the screenshots above are that session. `lab stop` quit only its own game, and afterwards all 114 registry rows
+and the player's autosaves, LocalStorage, Hall of Fame and options files matched the backup exactly.
+
+**NOT verified yet:** the `lab run` command as a whole (its parts ran inside bisect), the Windows default paths, and a
+Mods-tab switch followed by a launch through the bench's own button (the flags it writes were watched taking effect, as
+above).
 
 
 ## Engine behaviour this relies on
