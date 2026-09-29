@@ -54,14 +54,17 @@ test("evidence is read only by date, never by an arbitrary file name", () => {
 
 test("another lab or bisect run blocks a launch; this process and look-alike names do not", () => {
   const ps = [
-    "101 node tower-bench.mjs lab start --seed 1",
-    "102 node /x/tower-bench.mjs bisect --turns 30",
-    "103 sleep-and-keep-deep-running",
-    "104 node tower-bench.mjs lab status",
-    "105 zsh my-harness.sh run",
+    "100 1 zsh -c cd bench && node tower-bench.mjs lab start --seed 1",
+    "101 100 node tower-bench.mjs lab start --seed 1",
+    "102 1 node /x/tower-bench.mjs bisect --turns 30",
+    "103 1 sleep-and-keep-deep-running",
+    "104 1 node tower-bench.mjs lab status",
+    "105 1 zsh my-harness.sh run",
   ].join("\n");
-  assert.deepEqual(otherHarnesses(ps, 101, undefined), ["node /x/tower-bench.mjs bisect --turns 30"]);
-  assert.deepEqual(otherHarnesses(ps, 102, "my-harness"), ["node tower-bench.mjs lab start --seed 1", "zsh my-harness.sh run"]);
+  assert.deepEqual(otherHarnesses(ps, 101, undefined), ["node /x/tower-bench.mjs bisect --turns 30"],
+    "the shell that started this run names the command too, and is not another harness");
+  assert.deepEqual(otherHarnesses(ps, 102, "my-harness"),
+    ["zsh -c cd bench && node tower-bench.mjs lab start --seed 1", "node tower-bench.mjs lab start --seed 1", "zsh my-harness.sh run"]);
 });
 
 test("lab stop refuses to kill a game that is not the lab's own", async () => {
