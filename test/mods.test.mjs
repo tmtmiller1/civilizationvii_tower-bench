@@ -5,10 +5,11 @@ import { modHealth, sourceOf } from "../lib/mods.mjs";
 const paths = { userMods: "/U/Library/Application Support/Civilization VII/Mods" };
 const WS = "/U/Library/Application Support/Steam/steamapps/workshop/content/1295660";
 
-const row = (id, path, disabled, extra = {}) => ({ row: 1, id, version: 1, disabled, path, lastWrite: 0, name: id, ...extra });
+const row = (id, path, disabled, extra = {}) =>
+  ({ row: 1, id, version: 1, disabled, path, lastWrite: 0, name: id, ...extra });
 
 test("sources are classified from the scanned path", () => {
-  assert.deepEqual(sourceOf(`${WS}/3737200066/demographics/demographics.modinfo`, paths), { kind: "workshop", label: "Workshop 3737200066" });
+  assert.deepEqual(sourceOf(`${WS}/1234567890/demographics/demographics.modinfo`, paths), { kind: "workshop", label: "Workshop 1234567890" });
   assert.equal(sourceOf(`${paths.userMods}/demographics/demographics.modinfo`, paths).kind, "local");
   assert.equal(sourceOf(`${paths.userMods}/demographics/dist/demographics/demographics.modinfo`, paths).kind, "nested");
   assert.equal(sourceOf("/X/CivilizationVII.app/Contents/Resources/DLC/napoleon/napoleon.modinfo", paths).kind, "official");
@@ -25,16 +26,16 @@ test("two enabled copies of one id is an error", () => {
 
 test("a Workshop copy live over a local copy is a warning that names the live copy", () => {
   const [m] = modHealth([
-    row("demographics", `${WS}/3737200066/demographics/demographics.modinfo`, 0),
+    row("demographics", `${WS}/1234567890/demographics/demographics.modinfo`, 0),
     row("demographics", `${paths.userMods}/demographics/demographics.modinfo`, 1),
   ], paths);
   assert.equal(m.issues[0].severity, "warn");
-  assert.match(m.issues[0].text, /Live: Workshop 3737200066/);
+  assert.match(m.issues[0].text, /Live: Workshop 1234567890/);
 });
 
 test("a local copy live over a disabled Workshop copy is informational", () => {
   const [m] = modHealth([
-    row("demographics", `${WS}/3737200066/demographics/demographics.modinfo`, 1),
+    row("demographics", `${WS}/1234567890/demographics/demographics.modinfo`, 1),
     row("demographics", `${paths.userMods}/demographics/demographics.modinfo`, 0),
   ], paths);
   assert.equal(m.issues[0].severity, "info");

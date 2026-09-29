@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { classify, modOf } from "../lib/signatures.mjs";
 
-// Lines copied verbatim from the 1.5.0 logs on the development machine, 2026-09-26.
+// Lines from the 1.5.0 logs, 2026-09-26, with mod and asset names replaced by neutral ones.
 const REAL = {
-  civ6Verb: "[2026-09-26 17:22:16]\tWarning: Apply Actions - No registered handler for 'game-artifacttweaks-always (ReplaceUIScript)'.",
-  scopeNoise: "[2026-09-26 17:22:15]\tWarning: Apply Actions - No registered handler for 'shell-washington (UpdateText)'.",
-  textIssues: "[2026-09-26 17:22:15]\tWarning: There were issues loading 'text/en_us/MoveLaterText.xml' but it safe to continue.",
-  missingAsset: "[2026-09-26 17:22:11]\tResourceRequestJob | Failed loading resource: blp:lp_circ_alexander_256",
+  civ6Verb: "[2026-09-26 17:22:16]\tWarning: Apply Actions - No registered handler for 'game-example-always (ReplaceUIScript)'.",
+  scopeNoise: "[2026-09-26 17:22:15]\tWarning: Apply Actions - No registered handler for 'shell-example (UpdateText)'.",
+  textIssues: "[2026-09-26 17:22:15]\tWarning: There were issues loading 'text/en_us/ExampleText.xml' but it safe to continue.",
+  missingAsset: "[2026-09-26 17:22:11]\tResourceRequestJob | Failed loading resource: blp:lp_circ_example_256",
   startupMessages: "[2026-09-26 17:22:08]\t[localization]: StartupErrorMessages.xml",
   htmlParse: "[2026-09-26 17:22:18]\tHTML Parser Error@:fs://game/root-game.html@1:2043: Premature end of file  Currently open tags: html, div, div..",
 };
@@ -17,7 +17,7 @@ test("a Civ VI action verb is a warning that names the dead action group", () =>
   assert.equal(r.signature, "civ6-verb");
   assert.equal(r.severity, "warn");
   assert.match(r.hint, /ReplaceUIScript is a Civ VI action/);
-  assert.match(r.hint, /game-artifacttweaks-always/);
+  assert.match(r.hint, /game-example-always/);
 });
 
 test("a valid Civ VII verb without a handler in this scope is noise", () => {
@@ -29,14 +29,14 @@ test("a valid Civ VII verb without a handler in this scope is noise", () => {
 test("text-file load issues warn about the whole file being dropped", () => {
   const r = classify(REAL.textIssues);
   assert.equal(r.severity, "warn");
-  assert.match(r.hint, /MoveLaterText\.xml/);
+  assert.match(r.hint, /ExampleText\.xml/);
   assert.match(r.hint, /duplicate LOC tag/);
 });
 
 test("a missing blp asset names the asset", () => {
   const r = classify(REAL.missingAsset);
   assert.equal(r.signature, "missing-asset");
-  assert.match(r.hint, /blp:lp_circ_alexander_256/);
+  assert.match(r.hint, /blp:lp_circ_example_256/);
 });
 
 test("a file NAMED like an error is not an error", () => {

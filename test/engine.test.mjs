@@ -8,7 +8,8 @@ import { performWrite, readServed, sampleWatches, worldSnapshot } from "../lib/e
 function fakeEngine({ delay = 100, w = 6, h = 4, featureClears = false, initial = {} } = {}) {
   const terrains = [{ $index: 0, TerrainType: "TERRAIN_FLAT" }, { $index: 1, TerrainType: "TERRAIN_COAST" }];
   const features = [{ $index: 0, FeatureType: "FEATURE_FOREST" }, { $index: 1, FeatureType: "FEATURE_SAGEBRUSH_STEPPE" }];
-  const table = (rows, key) => Object.assign(rows, { lookup: (v) => rows.find((r) => r.$index === v || r[key] === v) ?? null });
+  const table = (rows, key) =>
+    Object.assign(rows, { lookup: (v) => rows.find((r) => r.$index === v || r[key] === v) ?? null });
   const plots = new Map(Object.entries(initial));
   const plot = (x, y) => plots.get(`${x},${y}`) ?? { t: 0, f: -1, r: -1, o: -1 };
   const later = (fn) => { if (delay !== null) setTimeout(fn, delay); };

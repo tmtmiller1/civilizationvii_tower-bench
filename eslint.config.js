@@ -4,9 +4,9 @@ import globals from "globals";
 
 // Engine globals referenced by the functions in lib/engine.mjs, which run inside the game's page.
 const ENGINE_GLOBALS = Object.fromEntries([
-  "Autoplay", "Configuration", "Database", "DirectionTypes", "engine", "Game", "GameContext", "GameInfo",
-  "GameplayMap", "GameSetup", "GameModeTypes", "Locale", "MapCities", "MapConstructibles", "MapUnits",
-  "Network", "PlayerOperationTypes", "Players", "UI", "Units", "WorldBuilder",
+  "Autoplay", "Cities", "Configuration", "Database", "DirectionTypes", "engine", "Game", "GameContext", "GameInfo",
+  "FeatureTypes", "GameplayMap", "GameSetup", "GameModeTypes", "Locale", "MapCities", "MapConstructibles", "MapUnits",
+  "Network", "PlayerOperationTypes", "Players", "ResourceTypes", "UI", "Units", "WorldBuilder",
 ].map((name) => [name, "readonly"]));
 
 const RULES = {
@@ -32,12 +32,19 @@ export default [
     rules: RULES,
   },
   {
-    files: ["lib/engine.mjs", "lib/events.mjs", "lib/lab.mjs", "lib/deploy.mjs", "test/**/*.mjs"],
+    files: ["lib/engine.mjs", "lib/engine-write.mjs", "lib/events.mjs", "lib/lab.mjs", "lib/deploy.mjs", "test/**/*.mjs"],
     languageOptions: { globals: { ...globals.browser, ...ENGINE_GLOBALS } },
   },
   {
     files: ["ui/**/*.js"],
-    languageOptions: { sourceType: "script", globals: { ...globals.browser } },
+    languageOptions: { sourceType: "module", globals: { ...globals.browser } },
+  },
+  {
+    // Page-side functions are sent to the game as source text, so each carries its helpers nested in
+    // its own body and the line count measures the whole bundle. Complexity and statement limits still
+    // apply to every nested helper.
+    files: ["lib/engine.mjs", "lib/engine-write.mjs"],
+    rules: { "max-lines-per-function": "off" },
   },
   {
     // Tests are flat lists of cases; the size rules measure nothing useful there.
