@@ -1,0 +1,19 @@
+{
+  "// Dev-only": "Type-checks the bench's JavaScript through JSDoc and inference. Emits nothing.",
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
+  },
+  "include": ["tower-bench.mjs", "lib/**/*.mjs", "ui/**/*.js", "types/**/*.d.ts"],
+  "exclude": ["node_modules", "dist", "test"]
+}

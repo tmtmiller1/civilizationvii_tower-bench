@@ -11,7 +11,16 @@
   },
   "scripts": {
     "test": "node --test \"test/*.test.mjs\"",
+    "lint": "eslint .",
+    "check": "tsc -p .",
+    "verify": "npm run check && npm run lint && npm test",
     "serve": "node tower-bench.mjs serve"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "eslint": "^9.39.5",
+    "globals": "^17.12.0",
+    "typescript": "^5.9.3"
+  }
 }
