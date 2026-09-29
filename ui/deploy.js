@@ -54,11 +54,13 @@ function renderProof(r) {
   const stale = r.files.filter((f) => f.live !== "SERVED").length;
   const summary = stale ? `${stale} of ${r.files.length} UI file(s) differ from what the game serves.`
     : `All ${r.files.length} UI file(s) are what the game serves.`;
-  $("deploy").replaceChildren(
+  // replaceChildren would print a null as the text "null", so absent parts are dropped first.
+  $("deploy").replaceChildren(...[
     h("p", { class: stale ? "error" : "ok" }, summary),
     r.refuse ? h("p", { class: "sev-warn" }, r.refuse) : null,
     h("table", {}, h("tbody", {}, r.files.map((f) => h("tr", {}, h("td", {}, f.rel),
-      h("td", { class: f.live === "SERVED" ? "ok" : "error" }, f.live))))));
+      h("td", { class: f.live === "SERVED" ? "ok" : "error" }, f.live))))),
+  ].filter((el) => el !== null));
 }
 
 $("dep-plan").addEventListener("click", async () => {

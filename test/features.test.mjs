@@ -148,6 +148,8 @@ test("watch definitions persist, series keep one value per turn, violations are 
   store.record({ turn: 1, watches: { gold: { value: 11 } } });
   store.record({ turn: 2, watches: { gold: { value: 15 } } });
   assert.deepEqual(store.series().gold, [{ turn: 1, value: 11 }, { turn: 2, value: 15 }]);
+  assert.equal(store.latest().turn, 2, "a page opened later reads the last recorded sample, invariants included");
+  assert.equal(new WatchStore(fs.mkdtempSync(path.join(os.tmpdir(), "tb-w-"))).latest(), null);
   assert.deepEqual(violations({ invariants: { a: { ok: true }, b: { ok: false, detail: "false" } } }), [{ name: "b", detail: "false" }]);
   store.remove("alive");
   assert.throws(() => store.remove("alive"), /no watch or invariant/);

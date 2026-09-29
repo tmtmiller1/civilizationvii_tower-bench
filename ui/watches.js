@@ -47,7 +47,7 @@ export async function loadWatches(lastSample) {
     const d = await api("/api/watches");
     const rows = [
       ...d.watches.map((w) => watchRow(w, d.series[w.name] ?? [])),
-      ...d.invariants.map((v) => invariantRow(v, lastSample?.invariants?.[v.name])),
+      ...d.invariants.map((v) => invariantRow(v, (lastSample ?? d.latest)?.invariants?.[v.name])),
     ];
     $("watches").replaceChildren(rows.length ? h("table", {},
       headRow(["kind", "name", "expression", "latest", "series", ""]),
