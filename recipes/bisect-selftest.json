@@ -1,0 +1,9 @@
+{
+  "name": "bisect-selftest",
+  "seed": 4242,
+  "age": "AGE_ANTIQUITY",
+  "steps": [
+    { "turns": 1 },
+    { "expect": "typeof globalThis.emigration === 'undefined'" }
+  ]
+}

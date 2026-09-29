@@ -1,0 +1,17 @@
+{
+  "name": "tower-bench",
+  "version": "0.1.0",
+  "description": "Live test bench for Civilization VII mods: inspect and change a running game, with every write verified, undoable and logged.",
+  "type": "module",
+  "bin": {
+    "tower-bench": "./tower-bench.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "serve": "node tower-bench.mjs serve"
+  },
+  "license": "MIT"
+}
