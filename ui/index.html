@@ -193,7 +193,7 @@
             <input id="resource-type" class="type" list="dl-resources" placeholder="RESOURCE_IRON">
             <input id="resource-amount" class="num" type="number" value="1" min="1" title="Amount">
             <button data-write="resource.set">Set</button><button data-write="resource.clear">Clear</button></div>
-          <p class="note">Writes are sent as the local player on behalf of the owner, the route your notes found the engine accepts. Owners are checked before sending, since an invalid player id can crash the game.</p>
+          <p class="note">Writes are sent as the local player on behalf of the owner, the route the engine accepts. Owners are checked before sending, since an invalid player id can crash the game.</p>
         </div>
       </div>
       <datalist id="dl-units"></datalist><datalist id="dl-terrains"></datalist>
@@ -262,7 +262,7 @@
         <button id="lint-run" class="primary">Lint the live UI</button>
         <span id="lint-meta" class="muted"></span>
       </div>
-      <p class="note">Checks the running UI for GameFace failures: CSS grid, italic text that renders blank, border colours that fell back to the text colour, sub-pixel borders, 0x0 elements mounted on body, and LOC tags or engine type names visible on screen.</p>
+      <p class="note">Checks the running UI for GameFace failures: italic text that renders blank, border colours that never resolved, sub-pixel borders, and LOC tags or engine type names visible on screen. CSS grid shows up only in the log, so the Logs tab catches it.</p>
       <div id="lint" class="card"><span class="muted">Open the screen you want to check in game, then run.</span></div>
     </section>
 
