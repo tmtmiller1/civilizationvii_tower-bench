@@ -25,7 +25,9 @@ re-read until the change is observed, recorded in an evidence log, and can be un
   set terrain|feature|resource <TYPE|none> <where> [--amount N] --yes
   undo --yes                           revert today's most recent landed write
 
-  mods [--all]                         duplicate ids and which copy is live
+  mods [--all] [--filter TEXT]         duplicate ids and which copy is live; filter by id, name or author
+  mods on|off <id> [copy] --yes        switch a mod on or off for the next launch (game closed; undoable)
+  mods live <id> <copy> --yes          load this copy and switch the id's other copies off
   logs [--follow] [--level warn] [--mod ID]
   evidence [--md] [--date YYYY-MM-DD]  what the bench did and what the game did back
   smoke --yes <where>                  self-test every write and its undo on one plot

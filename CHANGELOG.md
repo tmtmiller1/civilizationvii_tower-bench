@@ -15,6 +15,8 @@ First public release.
 - Event bridge (`events watch/wait`) and the optional `tower-bench-agent` mod that records from page load through
   reloads.
 - Watches and invariants sampled once per turn; GameFace UI lint; classified log tails; mod-copy health from
-  `Mods.sqlite`.
+  `Mods.sqlite`, filterable by id, name or author.
+- Switch mods on or off, or choose which copy of a mod loads, for the next launch: refused while the game runs,
+  verified by reading the registry back, and undoable.
 - Seeded hands-free test games (`lab`), recipes, and bisection over enabled mods, restoring the player's files and mod
   registry after every game.

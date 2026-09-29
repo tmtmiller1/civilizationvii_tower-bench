@@ -1,4 +1,4 @@
-import { $, state, h, api, messageOf } from "./core.js";
+import { $, state, h, api, messageOf, registryLocked } from "./core.js";
 
 const CATALOG_LISTS = [["units", "dl-units"], ["terrains", "dl-terrains"], ["features", "dl-features"],
   ["resources", "dl-resources"]];
@@ -40,6 +40,9 @@ export function paintArm() {
   const inGame = state.status?.scope === "game";
   for (const w of document.querySelectorAll("[data-write]")) {
     /** @type {HTMLButtonElement} */ (w).disabled = !state.armed || !inGame;
+  }
+  for (const w of document.querySelectorAll("[data-registry]")) {
+    /** @type {HTMLButtonElement} */ (w).disabled = registryLocked();
   }
 }
 

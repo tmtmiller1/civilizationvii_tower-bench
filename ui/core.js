@@ -32,6 +32,9 @@ export async function api(path, body) {
   return data;
 }
 
+// Registry changes need writes armed and the game closed: it reads the mod list only at launch.
+export const registryLocked = () => !state.armed || (state.status?.scope ?? "offline") !== "offline";
+
 export const messageOf = (e) => (e instanceof Error ? e.message : String(e));
 
 let toastTimer;

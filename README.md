@@ -155,7 +155,22 @@ hits in 511 elements, both the base game's own; point `--scope` at a mod's root 
 
 `mods` reads `Mods.sqlite` and groups copies by mod id: two enabled copies is an error, a Workshop copy live over a
 local one is a warning, a copy inside another mod's `dist/` is a shadow, and an enabled test probe is flagged because it
-loads into every game, your campaign included. Names are resolved through each mod's own `LocalizedText`.
+loads into every game, your campaign included. Names and authors are resolved through each mod's own `LocalizedText`,
+and `--filter` (or the box in the Mods tab) matches id, name or author, so `--filter tower` lists one author's mods.
+
+```
+node tower-bench.mjs mods --filter canals
+node tower-bench.mjs mods live tower-canals "Mods/tower-canals" --yes    # load this copy, switch the others off
+node tower-bench.mjs mods off example-probe --yes
+node tower-bench.mjs undo --yes
+```
+
+The same changes are buttons in the Mods tab. They change which mods the game loads at its next launch, so they are
+refused while the game is running, while a lab run holds a backup of the registry, and while writes are disarmed. Each
+change is read back from `Mods.sqlite` (`LANDED`, `NO EFFECT` or `ALREADY`), recorded as evidence and undone by Undo
+like a map write. `live` is the fix for two enabled copies of one id; `on` never enables a second copy. A flag the game
+left empty (`NULL`, shown as "default") is only replaced when you change that copy, and undo puts `NULL` back rather
+than guessing 0 or 1: the game uses it for more than one state. Official content is left to the game's add-ons screen.
 
 `logs` tails `UI.log`, `Modding.log`, `Database.log` and `Scripting.log` and classifies lines against signatures from
 real failures:
@@ -216,7 +231,7 @@ your files are restored after every game.
 
 ## Safety
 
-- Map writes (place, remove, set, undo) are disarmed until armed in the UI or confirmed with `--yes` on the CLI. The
+- Map writes (place, remove, set, undo) and mod switches are disarmed until armed in the UI or confirmed with `--yes` on the CLI. The
   console, watches and deploy are not gated by arming: the console runs whatever JavaScript you give it in the game,
   and deploy copies files and reloads the game's UI. The SQL console refuses anything but a single read.
 - Every player id is resolved through `Players.get` before a request is sent: an invalid id passed to some engine
