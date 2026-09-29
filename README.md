@@ -51,8 +51,8 @@ player. Requests go out as the local player with `Owner` naming the target civ, 
 **Undo** reverts today's most recent landed write that has not been undone. The history is the evidence log, so it
 survives restarts and the CLI and web UI share it. **Mod code**: each write result carries the minimal standalone call
 that does the same thing. **Console**: engine objects serialise to `{}` through JSON, which hides the API, so objects
-are described instead, with every method name on their prototype chain. SQL runs read-only against the live
-gameplay database.
+are described instead, with every method name on their prototype chain. SQL takes one `SELECT` (or `WITH ...
+SELECT`) at a time against the live gameplay database; anything that writes is refused before it reaches the game.
 
 ## Map and world diff
 
@@ -80,11 +80,11 @@ node tower-bench.mjs deploy ~/code/my-mod --prove    # copy nothing: does the ga
 ```
 
 The target is whichever copy `Mods.sqlite` says the game loads. A deploy into a **Workshop** copy is refused, because
-Steam replaces that folder and every other copy is ignored; two enabled copies are refused too. After copying UI files it
-calls `UI.reloadUI()` (skip with `--no-reload`), because `UIFileWatcher` does not reload the page for a changed
+Steam replaces that folder and every other copy is ignored; two enabled copies are refused too. After copying UI files
+it calls `UI.reloadUI()` (skip with `--no-reload`), because `UIFileWatcher` does not reload the page for a changed
 UIScript. A stamp on the page then shows whether it reloaded, and each UI file the game now serves is hashed and
-compared with the source: `SERVED`, `STALE` or `UNREADABLE`. Data and text files are compiled when a game
-starts, so they are reported as needing a new game rather than pretended live. A mod with its own deploy script
+compared with the source: `SERVED`, `STALE` or `UNREADABLE`. Data and text files are compiled when a game starts, so
+they are reported as needing a new game rather than pretended live. A mod with its own deploy script
 (`scripts/deploy.mjs`, `install-dev.sh`) should keep using it, since it can ship files the modinfo does not declare;
 `--prove` then answers "is my edit live?" on its own.
 
@@ -187,11 +187,15 @@ node tower-bench.mjs bisect --turns 30 --replicates 2
 change. Seeded Play Now games are deterministic. `lab turns` ends turns without Autoplay (Autoplay spends the
 treasury) and refuses to run in any game the lab did not start. `lab stop` quits the game and restores every backed-up
 file and every registry flag by path; whatever the test game wrote is moved into the run folder, never deleted. Before
-starting it refuses if the game or another harness is running, and warns about enabled probe mods.
+starting it refuses if the game or another lab or bisect run is running, and warns about enabled probe mods. Set
+`TOWER_BENCH_HARNESS` to a regular expression matching your own test scripts to have them block a start too.
+`lab stop` only quits the game the lab started; any other running game is refused, not killed.
 
-**A recipe** is a test as data: a seed and start age, then steps (`snapshot`, `write`, `turns`, `diff`, `expect`,
-`eval`, `lint`, `sample`, `events`, `await`). Positions can anchor to the local player's first unit with an offset, so one recipe works on
-any seed. `recipe record` turns the writes you landed by hand today into a recipe, skipping any you undid.
+**A recipe** is a test written as JSON: a seed and start age, then steps (`snapshot`, `write`, `turns`, `diff`,
+`expect`, `eval`, `lint`, `sample`, `events`, `await`). Positions can anchor to the local player's first unit with an
+offset, so one recipe works on any seed. `recipe record` turns the writes you landed by hand today into a recipe,
+skipping any you undid. A recipe is code, like a test file: `expect` and `eval` run in the game and `await` matches run
+in Node with your user's rights, so run recipes you wrote or have read.
 
 ```json
 { "name": "strand-check", "seed": 4242, "age": "AGE_ANTIQUITY",
@@ -212,11 +216,16 @@ your files are restored after every game.
 
 ## Safety
 
-- Writes are disarmed until armed in the UI or confirmed with `--yes` on the CLI.
+- Map writes (place, remove, set, undo) are disarmed until armed in the UI or confirmed with `--yes` on the CLI. The
+  console, watches and deploy are not gated by arming: the console runs whatever JavaScript you give it in the game,
+  and deploy copies files and reloads the game's UI. The SQL console refuses anything but a single read.
 - Every player id is resolved through `Players.get` before a request is sent: an invalid id passed to some engine
   calls segfaults the game.
-- The server binds to `127.0.0.1` only, refuses any other `Host` header, and refuses a `POST` without an
-  `X-Tower-Bench: 1` header, so a web page open in your browser cannot drive the game through it.
+- The server binds to `127.0.0.1` only, refuses any other `Host` header, refuses a `POST` without an
+  `X-Tower-Bench: 1` header, and refuses any request a browser marks as cross-site, so a web page open in your
+  browser cannot drive or load the game through it. It serves only its own page and scripts.
+- `deploy` refuses a modinfo that lists a file outside the mod folder, and the bench only connects to a debugger
+  socket on this machine.
 - The debugger port itself is the game's, not this tool's. While the game runs with it open, anything on the machine
   can reach it.
 
@@ -228,6 +237,7 @@ your files are restored after every game.
 | `TOWER_BENCH_INSTALL` | the Steam app bundle, used for the build version |
 | `TOWER_BENCH_CDP_PORT` | `9444` |
 | `TOWER_BENCH_EVIDENCE_DIR` | `~/.tower-bench/evidence`; snapshots, watches and lab runs live beside it |
+| `TOWER_BENCH_HARNESS` | unset; a regular expression for your own test scripts, which then block `lab start` and `bisect` |
 
 On Windows the user directory defaults to `%LOCALAPPDATA%\Firaxis Games\Sid Meier's Civilization VII`.
 
@@ -235,24 +245,23 @@ On Windows the user directory defaults to `%LOCALAPPDATA%\Firaxis Games\Sid Meie
 
 **Watched working, 2026-09-26, game 1.5.0:**
 
-- 70 tests, stable across 15 consecutive runs. They cover the in-game functions run against a fake engine: the write
-  verification loop reaching each verdict, the snapshot reading row shift and north from the engine, watches and
-  invariants, and the page-side hash matching the Node-side one. The event bridge is tested end to end through the
-  real page-side function: subscribe, fire, drain, readable names, unsubscribe via `engine.off`, buffer overflow
-  counted as dropped, a simulated reload caught as a gap, de-duplication against `UI.log` including a clipped line,
-  `waitFor` and `none`, recipe `await` steps, and the agent script loading on its own and keeping its list and logging
-  when a live session unsubscribes. Two deliberate breaks of the bridge (pinning, page identity) each turned a test
-  red. They also cover world diffs, recipe execution and recording, the bisection search
-  (culprit, interaction, flaky failures, both "no" answers), deploy planning and its refusals, watch series, lab
-  restore (files back byte for byte, `NULL` kept as `NULL`, nothing deleted, new registry rows left alone), log
-  signatures against lines copied from this machine's logs, and every CLI command run as a subprocess.
+- 70 tests at the time, stable across 15 consecutive runs (78 now, with the security tests). They cover the in-game
+  functions run against a fake engine: the write verification loop reaching each verdict, the snapshot reading row shift
+  and north from the engine, watches and invariants, and the page-side hash matching the Node-side one. The event bridge
+  is tested end to end through the real page-side function: subscribe, fire, drain, readable names, unsubscribe via
+  `engine.off`, buffer overflow counted as dropped, a simulated reload caught as a gap, de-duplication against `UI.log`
+  including a clipped line, `waitFor` and `none`, recipe `await` steps, and the agent script loading on its own and
+  keeping its list and logging when a live session unsubscribes. Two deliberate breaks of the bridge (pinning, page
+  identity) each turned a test red. They also cover world diffs, recipe execution and recording, the bisection search
+  (culprit, interaction, flaky failures, both "no" answers), deploy planning and its refusals, watch series, lab restore
+  (files back byte for byte, `NULL` kept as `NULL`, nothing deleted, new registry rows left alone), log signatures
+  against lines from real game logs, and every CLI command run as a subprocess.
 - Against real data: `mods` found 107 ids, 71 enabled, 7 duplicated ids and 3 enabled test probes. `logs` classified
   1,326 lines. `deploy` refused `universal-auto-explore` because its Workshop copy is live, and planned Demographics
   correctly: its live copy dates from 09-24 and differs from the 09-26 source.
 - In headless Chrome: all nine tabs with zero console errors or exceptions. The lint rules flagged all six traps in a
-  fixture page and none of its decoys. The map drew a synthetic 96x60 world with a diff overlay, and a click on a
-  plot's pixel centre mapped back to that plot. The server refused a foreign `Host`, a headerless `POST` and a
-  disarmed write.
+  fixture page and none of its decoys. The map drew a synthetic 96x60 world with a diff overlay, and a click on a plot's
+  pixel centre mapped back to that plot. The server refused a foreign `Host`, a headerless `POST` and a disarmed write.
 
 **Watched live, 2026-09-26, game 1.5.0, a seeded lab game (seed 4242) started by `lab start`:**
 
@@ -292,6 +301,8 @@ On Windows the user directory defaults to `%LOCALAPPDATA%\Firaxis Games\Sid Meie
   reloaded the UI itself, served the new bytes, and the new code's marker was live in the page on the same turn.
 
 **NOT verified yet:** the `lab run` command as a whole (its parts ran inside bisect), and the Windows default paths.
+The code was restructured for 0.1.0 after the live runs above (every function kept its engine calls and their
+order, checked against the original side by side on a fake engine); the in-game paths have not been re-watched since.
 
 
 ## Engine behaviour this relies on
@@ -304,6 +315,12 @@ a loaded save does not, nothing gameplay-side lands before `UI.notifyUIReady()`,
 registry is restored by path because row ids change on re-scan, and a crash report lands 20 to 50 s after the game
 dies. The `DESTROY_ELEMENT` argument shapes follow the SDK's own `tuner-input.ts`.
 
+## Contributing
+
+`npm install` once, then `npm run verify` before a change: type check, lint and tests, with zero errors. The bench
+itself has no runtime dependencies; the installed packages are the checkers only.
+
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE). Tower Bench is not affiliated with or endorsed by Firaxis Games or 2K. Civilization is
+a trademark of Take-Two Interactive Software.
