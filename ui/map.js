@@ -1,6 +1,7 @@
-import { $, state, h, api, toast, messageOf } from "./core.js";
+import { $, state, h, api, toast, messageOf, isOpen } from "./core.js";
 import { refreshStatus, paintArm } from "./status.js";
 import { map, drawMap, plotAt } from "./map-canvas.js";
+import { loadMods } from "./mods.js";
 
 const at = () => ({ x: Number($("x").value), y: Number($("y").value) });
 
@@ -82,9 +83,15 @@ for (const b of document.querySelectorAll("[data-write]")) {
 $("undo").addEventListener("click", async () => {
   try {
     const r = await api("/api/undo", {});
+    refreshStatus();
+    // An undone mod switch changed the registry, not the map: there is no plot to re-read.
+    if (r.changes) {
+      toast(`Undone: ${r.undid} (${r.verdict}). Applies at the next launch.`, r.verdict !== "LANDED");
+      if (isOpen("mods")) loadMods();
+      return;
+    }
     renderResult(r);
     inspect();
-    refreshStatus();
   } catch (e) { toast(messageOf(e), true); }
 });
 
