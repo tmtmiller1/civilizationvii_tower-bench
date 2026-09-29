@@ -68,3 +68,16 @@ test("evidence exports as Markdown bullets with timing and the plot delta", () =
   assert.match(md, /^- \*\*set terrain TERRAIN_COAST at \(5, 6\): LANDED in 108 ms\.\*\* terrain TERRAIN_FLAT -> TERRAIN_COAST\./);
   assert.match(md, /Evidence: watched 2026-09-26 on 1\.5\.0, turn 30, tower-bench\.$/);
 });
+
+test("a land unit sent to water gets the watched explanation, not the turn-roll one", () => {
+  const req = { op: "unit.place", args: { x: 1, y: 1, type: "UNIT_WARRIOR", owner: 0 } };
+  const onWater = hintsFor(req, { verdict: "NO EFFECT", unitDomain: "DOMAIN_LAND", before: { water: true } });
+  assert.equal(onWater.length, 1);
+  assert.match(onWater[0], /water plot is discarded/);
+  const onLand = hintsFor(req, { verdict: "NO EFFECT", unitDomain: "DOMAIN_LAND", before: { water: false } });
+  assert.match(onLand.join(" "), /only land at the turn roll/);
+  const unknown = hintsFor(req, { verdict: "NO EFFECT", before: {} });
+  assert.match(unknown.join(" "), /only land at the turn roll/, "no domain known: the general hint stands");
+  const naval = hintsFor(req, { verdict: "NO EFFECT", unitDomain: "DOMAIN_SEA", before: { water: false } });
+  assert.doesNotMatch(naval.join(" "), /water plot/, "only the watched case is claimed");
+});

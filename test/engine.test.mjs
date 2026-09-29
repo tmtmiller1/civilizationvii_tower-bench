@@ -167,3 +167,14 @@ test("removing a town at a territory plot is refused, so it can never destroy th
   assert.match(r.reason, /no settlement on that plot/);
   assert.equal(sent, 0);
 });
+
+test("a unit placement that never appears records the unit's domain and whether the plot is water", async () => {
+  const g = fakeEngine();
+  g.GameInfo.Units.push({ $index: 0, UnitType: "UNIT_WARRIOR", Domain: "DOMAIN_LAND" });
+  g.GameplayMap.isWater = (x, y) => g.GameplayMap.getTerrainType(x, y) === 1;
+  install(g);
+  const r = await performWrite({ op: "unit.place", args: { x: 0, y: 0, type: "UNIT_WARRIOR", owner: 0 }, waitMs: 200 });
+  assert.equal(r.verdict, "NO EFFECT");
+  assert.equal(r.unitDomain, "DOMAIN_LAND");
+  assert.equal(r.before.water, false);
+});
