@@ -367,9 +367,14 @@ watches sampled per turn, the event stream, the console, deploy `--prove`, lint,
 game; the screenshots above are that session. `lab stop` quit only its own game, and afterwards all 114 registry rows
 and the player's autosaves, LocalStorage, Hall of Fame and options files matched the backup exactly.
 
-**NOT verified yet:** the `lab run` command as a whole (its parts ran inside bisect), the Windows default paths, and a
-Mods-tab switch followed by a launch through the bench's own button (the flags it writes were watched taking effect, as
-above).
+**A Mods-tab switch, watched end to end on the real registry, 2026-09-29:** the Off button on one copy of a mod
+`LANDED`; at the game's next launch (started by another test harness on the same machine) `Modding.log` applied every
+enabled mod except that one; the Undo button then put the flag back, and all 113 registry rows matched a snapshot taken
+before the switch.
+
+**NOT verified yet:** the `lab run` command as a whole (its parts ran inside bisect), the Windows default paths, and the
+hint for a land unit sent to water as shown in a live write (its inputs, `GameplayMap.isWater` and the unit's `Domain`,
+are what the base game's own scripts use).
 
 
 ## Engine behaviour this relies on
