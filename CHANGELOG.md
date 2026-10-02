@@ -33,6 +33,8 @@ All notable changes to Tower Bench are documented here. This project follows sem
 - Feature tabs register themselves; evidence shows before and after values for game-state actions.
 - `mcp`: an MCP server over stdio so AI assistants can use the bench; read-only unless started with
   `--allow-writes`, `--allow-lab` or `--allow-eval`, every call logged as evidence.
+- `nightly`: overnight checks after a game update (index, impact, pre-flight, l10n, every recipe in lab games) with a
+  morning report of what newly fails; schedulable with launchd. `lab` and `bisect` refuse while a nightly runs.
 - Examples in the README and the lint placeholder no longer name particular mods.
 
 ## [0.1.0] - 2026-09-29

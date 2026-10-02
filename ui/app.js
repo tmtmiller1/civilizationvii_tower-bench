@@ -20,6 +20,7 @@ import "./cheats.js";
 import "./patch.js";
 import "./cost.js";
 import "./release.js";
+import "./nightly.js";
 
 const TAB_LOADERS = {
   mods: () => loadMods(),

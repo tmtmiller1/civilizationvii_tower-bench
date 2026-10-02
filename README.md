@@ -295,6 +295,30 @@ The techniques library and the evidence log are also offered as MCP resources. s
 Tested by exchanging JSON-RPC with the server over stdio and against real files read-only; not yet watched driving a
 running game.
 
+## Nightly regression runs
+
+```
+node tower-bench.mjs nightly init
+node tower-bench.mjs nightly run --only-if-updated
+node tower-bench.mjs nightly schedule --at 03:00 --yes
+```
+
+A game update is the moment most likely to break every mod at once, so the bench can check your mods overnight and leave
+a report for the morning. `nightly init` writes a suite listing your enabled local mods, each with a recipe that starts
+a seeded game and ends one turn; add your own recipes to it. `nightly run` notices a new game version, indexes it
+(refreshing the Debug database with one lab game when it predates the install), compares it with the previous index and
+lists what the update breaks in each mod. It then runs each mod's pre-flight and localization checks and each recipe in
+a seeded lab game that restores saves, settings and the registry afterwards, reads the logs for errors the mod caused,
+and triages any crash. Each mod is reported PASS, FAIL or BROKE-BY-UPDATE with its evidence, together with what newly
+fails or was fixed since the last report, as JSON, Markdown and HTML.
+
+`--only-if-updated` does nothing until the version changes. A run refuses to start while the game is running, while
+another lab, bisect or nightly run is active, or when a save was written in the last 30 minutes, and it checks again
+before every game, so someone starting to play stops the rest of the night. `nightly schedule` installs a per-user
+launchd agent on macOS (on Windows and Linux it prints the schtasks or cron line to add yourself); `nightly unschedule
+--yes` removes it. The orchestration, reports and schedule generation are tested; the lab games and the scheduled launch
+have not been watched end to end.
+
 ## Doctor: "my mod does not work"
 
 ```
