@@ -1,0 +1,1964 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "extend-vanilla-ui",
+      "title": "Extend vanilla UI",
+      "blurb": "Add to screens and panels the game already has, without taking them away from other mods."
+    },
+    {
+      "id": "new-ui",
+      "title": "New UI",
+      "blurb": "Your own screens, panels, map interactions and hotkeys."
+    },
+    {
+      "id": "lifecycle-and-events",
+      "title": "Lifecycle and events",
+      "blurb": "When your code runs, what it listens to, and how it cleans up."
+    },
+    {
+      "id": "persist-data",
+      "title": "Persist data",
+      "blurb": "Settings and state that must outlive a reload, a restart, a save or an age."
+    },
+    {
+      "id": "cross-mod",
+      "title": "Cross-mod",
+      "blurb": "Living next to other mods: detection, optional integration, shared registries and names."
+    },
+    {
+      "id": "patch-safely",
+      "title": "Patch safely",
+      "blurb": "When you must change vanilla behaviour, change it so it survives patches and other mods."
+    },
+    {
+      "id": "map-and-lenses",
+      "title": "Map and lenses",
+      "blurb": "Paint information on the map, and generate maps."
+    },
+    {
+      "id": "data-and-database",
+      "title": "Data and database",
+      "blurb": "XML and SQL that load on the current game, and reading the compiled database."
+    },
+    {
+      "id": "gameplay-from-ui",
+      "title": "Gameplay from UI",
+      "blurb": "UI scripts that change the game: requests, verification and multiplayer safety."
+    },
+    {
+      "id": "art-and-assets",
+      "title": "Art and assets",
+      "blurb": "Icons, textures and models: what a mod folder can and cannot ship."
+    },
+    {
+      "id": "gameface-css",
+      "title": "GameFace CSS",
+      "blurb": "The UI engine supports a subset of CSS and fails silently on the rest."
+    },
+    {
+      "id": "investigate-and-debug",
+      "title": "Investigate and debug",
+      "blurb": "Find the cause before you build the fix."
+    },
+    {
+      "id": "performance-and-limits",
+      "title": "Performance and limits",
+      "blurb": "Engine resource limits that crash the game when exceeded."
+    },
+    {
+      "id": "packaging-and-loading",
+      "title": "Packaging and loading",
+      "blurb": "Modinfo, import paths, which copy of your mod loads, and getting edits live."
+    }
+  ],
+  "entries": [
+    {
+      "id": "decorate-dont-replace",
+      "title": "Decorate, don't replace",
+      "category": "extend-vanilla-ui",
+      "purpose": "Add buttons, text or behaviour to a vanilla component while the vanilla component keeps running.",
+      "why": "Controls.decorate registers a factory that the component system calls for each new instance of the tag; your object gets beforeAttach, afterAttach, beforeDetach and afterDetach calls alongside the component's own lifecycle. Any number of mods can decorate the same tag and each decorator runs.",
+      "when": "Your default for any change to an existing legacy panel or screen: a dock button, an extra row, a label.",
+      "whenNot": "The screen is a ui-next component with no legacy tag (use componentregistry-override), or the DOM you need is built after afterAttach (see mutation-observer-retrofit).",
+      "snippet": "class MyModDockDecorator {\n  constructor(component) { this.component = component; }\n  beforeAttach() {}\n  afterAttach() {\n    this.component.addButton({\n      tooltip: \"LOC_MY_MOD_OPEN\",\n      modifierClass: \"my-mod\",\n      callback: () => ContextManager.push(\"my-mod-screen\", { singleton: true, createMouseGuard: true }),\n    });\n  }\n  beforeDetach() {}\n  afterDetach() {}\n}\nControls.decorate(\"panel-sub-system-dock\", (component) => new MyModDockDecorator(component));",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Register at module load. Controls.decorate does not attach to instances that already exist, so a decorator registered late misses the screen until it is rebuilt.",
+        "Read the component's fields defensively; private fields and method names change between patches.",
+        "Many screens moved to ui-next in 1.5.0 but kept their legacy tag, so decorators still attach there. A reactive re-render may discard children you inserted; re-insert on the component's own update path rather than once.",
+        "Prefix every class name and element id you add with your mod id."
+      ],
+      "status": "works",
+      "statusNote": "Unchanged in 1.5.0. Legacy tags of migrated screens are still decoratable because vanilla mounts them through a legacy-tag bridge.",
+      "evidence": {
+        "mods": 157,
+        "note": "found in 157 of 1249 corpus mods (their code contains the idiom); the sub-system dock alone is decorated by 38"
+      },
+      "objects": [
+        "Controls",
+        "ContextManager"
+      ],
+      "related": [
+        "componentregistry-override",
+        "mutation-observer-retrofit",
+        "extend-definition-by-subclass"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "componentregistry-override",
+      "title": "Capture and wrap a ui-next component",
+      "category": "extend-vanilla-ui",
+      "purpose": "Change a Solid (ui-next) component, such as the plot tooltip, so that other mods changing the same component still work.",
+      "why": "ComponentRegistry.register keeps one wrapper per name and swaps the factory inside it when the new overridePriority is greater than or equal to the stored one, so ties go to the last registration. Reading the current factory first and rendering it inside yours composes: each mod wraps whatever was there.",
+      "when": "Any change to a ui-next component: tooltips, setup screens, anything registered by name in core/ui-next.",
+      "whenNot": "You own the whole screen and no other mod should coexist with it. Even then, prefer wrapping.",
+      "snippet": "import { ComponentRegistry } from \"/core/ui-next/services/component-registry.js\";\n\nconst NAME = \"PlotTooltip\";\nconst current = ComponentRegistry.get(NAME);\n// .factory is a signal accessor: call it once, now, to get the factory itself.\nconst previous = current?.factory();\nif (previous) {\n  const MyModPlotTooltip = (props) => {\n    const inner = previous(props);\n    // add your own content around or after inner here\n    return inner;\n  };\n  ComponentRegistry.register({\n    name: NAME,\n    createInstance: MyModPlotTooltip,\n    overridePriority: current.overridePriority, // equal: later mods still win and wrap you\n  });\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Since 1.5.0 the registered wrapper's .factory is a Solid signal accessor. If you keep the wrapper (or the accessor) and call it at render time, it returns your own factory and the component renders itself recursively until the screen freezes. Call factory() once before registering.",
+        "A higher priority than the current one silently disables every mod that registered before you without wrapping. Priorities are bare numbers with no community convention.",
+        "Some components carry state in module-level signals that your wrapper cannot see; the plot tooltip, for example, has visibility gates written by other screens.",
+        "TooltipManager.registerPlotType is the legacy path. On 1.5.0 the map plot tooltip is the ui-next PlotTooltip component, and a mod built against the old plot-tooltip module fails to load."
+      ],
+      "status": "changed",
+      "statusNote": "1.5.0 moved more screens into ui-next and changed the wrapper's .factory from a plain function to a signal accessor.",
+      "evidence": {
+        "mods": 71,
+        "note": "found in 71 of 1249 corpus mods (their code contains the idiom); 59 register PlotTooltip or another named component, and only the ones that call the previous factory coexist"
+      },
+      "objects": [
+        "ComponentRegistry"
+      ],
+      "related": [
+        "decorate-dont-replace",
+        "ui-next-solid-screens",
+        "version-resilient-binding"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "extend-definition-by-subclass",
+      "title": "Extend a definition by subclassing it",
+      "category": "extend-vanilla-ui",
+      "purpose": "Change how a legacy component behaves from the inside when a decorator cannot reach the method you need.",
+      "why": "Controls.getDefinition returns the registered definition, including its createInstance class. Defining the same tag again with a subclass replaces the definition when its priority is greater than or equal to the existing one, and every new instance is built from your class.",
+      "when": "You need to override a method of a legacy component for every instance, and decoration plus a wrapped method is not enough.",
+      "whenNot": "Another mod is likely to redefine the same tag: only one definition wins. Decorate first.",
+      "snippet": "const base = Controls.getDefinition(\"advanced-options-panel\");\nif (base) {\n  const Base = base.createInstance;\n  class MyModAdvancedOptions extends Base {\n    onAttach() {\n      super.onAttach();\n      // your additions\n    }\n  }\n  Controls.define(\"advanced-options-panel\", {\n    ...base,\n    createInstance: MyModAdvancedOptions,\n    priority: Math.max(base.priority ?? 0, 100),\n  });\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Last definition with an equal or higher priority wins; a second mod doing the same thing replaces you without an error.",
+        "Your file must load after the vanilla definition. Resolve the definition at runtime rather than importing the class (see version-resilient-binding).",
+        "Instances created before your define keep the old class."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 125,
+        "note": "found in 125 of 1249 corpus mods (their code contains the idiom) (all Controls.define uses, new screens included)"
+      },
+      "objects": [
+        "Controls"
+      ],
+      "related": [
+        "decorate-dont-replace",
+        "version-resilient-binding",
+        "closure-wrap-patching"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "mutation-observer-retrofit",
+      "title": "Retrofit DOM the panel builds later",
+      "category": "extend-vanilla-ui",
+      "purpose": "Restyle or annotate elements a vanilla panel creates procedurally after it attaches.",
+      "why": "A decorator sees the component at attach time, but many panels build rows later. A MutationObserver scoped to the panel's root fires when those rows appear, and a style element guarded by an id is added once no matter how often the script runs.",
+      "when": "The node you need does not exist at afterAttach, or you only need CSS on vanilla classes.",
+      "whenNot": "A decorator or a wrapped method can reach the data directly. Observers keyed on vanilla class names break when those names change.",
+      "snippet": "const STYLE_ID = \"my-mod-styles\";\nif (!document.getElementById(STYLE_ID)) {\n  const style = document.createElement(\"style\");\n  style.id = STYLE_ID;\n  style.textContent = \".my-mod-note { color: #c8b98a; }\";\n  document.head.appendChild(style);\n}\n\nfunction annotate(root) {\n  for (const row of root.querySelectorAll(\".some-vanilla-row:not([data-my-mod])\")) {\n    row.setAttribute(\"data-my-mod\", \"1\");\n    const note = document.createElement(\"div\");\n    note.className = \"my-mod-note\";\n    row.appendChild(note);\n  }\n}\n\nexport function watchPanel(root) {\n  const observer = new MutationObserver(() => annotate(root));\n  observer.observe(root, { childList: true, subtree: true });\n  annotate(root);\n  return () => observer.disconnect();\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Mark what you already processed (a data attribute) or your own insertions retrigger the observer forever.",
+        "Scope the observer to one root, never document.body for the whole session.",
+        "Disconnect it when the panel detaches.",
+        "Injected CSS cannot move elements whose transform an animation owns (the tooltip container is one)."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 144,
+        "note": "found in 144 of 1249 corpus mods (their code contains the idiom); 209 inject a style element"
+      },
+      "objects": [
+        "MutationObserver",
+        "Controls"
+      ],
+      "related": [
+        "decorate-dont-replace",
+        "gameface-flexbox-layout"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "define-and-push-screen",
+      "title": "Define a screen and open it with ContextManager",
+      "category": "new-ui",
+      "purpose": "Add a new panel or screen of your own that takes input and closes cleanly.",
+      "why": "A Panel subclass registered with Controls.define becomes a custom element; ContextManager.push creates it, puts it on the modal stack and, with createMouseGuard, gives it the input focus rules vanilla screens get.",
+      "when": "Any new window, list or dialog.",
+      "whenNot": "You only add a few controls to an existing screen (decorate it instead).",
+      "snippet": "import Panel from \"/core/ui/panel-support.js\";\nimport ContextManager from \"/core/ui/context-manager/context-manager.js\";\n\nclass MyModScreen extends Panel {\n  onAttach() {\n    super.onAttach();\n    this.Root.innerHTML = '<div class=\"my-mod-screen__body\"></div>';\n  }\n}\n\nControls.define(\"my-mod-screen\", {\n  createInstance: MyModScreen,\n  description: \"My Mod screen\",\n  classNames: [\"my-mod-screen\"],\n  styles: [\"fs://game/my-mod/ui/my-mod-screen.css\"],\n  initializeImmediately: true,\n});\n\nexport const openMyModScreen = () =>\n  ContextManager.push(\"my-mod-screen\", { singleton: true, createMouseGuard: true });",
+      "snippetLang": "js",
+      "pitfalls": [
+        "On 1.5.0 a definition made after startup (for example from a module imported after engine.whenReady) is never initialized, and ContextManager.push throws reading inputContext. Set initializeImmediately: true, or load the defining module as its own UIScripts item.",
+        "A raw position: fixed overlay on document.body renders but receives no clicks, and native <button> does not render. Use a Panel and fxs-button.",
+        "Prefix the tag with your mod id; two mods defining the same tag collide.",
+        "Opening the game's dialog box drops the map out of a custom interface mode."
+      ],
+      "status": "works",
+      "statusNote": "Definitions made late need initializeImmediately on 1.5.0.",
+      "evidence": {
+        "mods": 97,
+        "note": "found in 97 of 1249 corpus mods (their code contains the idiom) for ContextManager.push; the late-definition failure and the input limits were watched on 1.5.0"
+      },
+      "objects": [
+        "Controls",
+        "ContextManager",
+        "Panel"
+      ],
+      "related": [
+        "jsmodel-databind",
+        "namespace-everything",
+        "custom-interface-mode"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "jsmodel-databind",
+      "title": "JSModel and Databind for reactive lists",
+      "category": "new-ui",
+      "purpose": "Build a legacy-style screen whose rows update from a model without rebuilding the DOM by hand.",
+      "why": "engine.createJSModel exposes a plain object under a global name; Databind attributes on your elements bind to paths in it, and engine.synchronizeModels pushes changes to the bound DOM.",
+      "when": "A new list or table screen that should not depend on the ui-next toolchain.",
+      "whenNot": "You are already building with Solid (ui-next), or the content is static.",
+      "snippet": "const model = { rows: [] };\nengine.createJSModel(\"g_MyModModel\", model);\n\nexport function buildList(container) {\n  const row = document.createElement(\"div\");\n  row.className = \"my-mod-row\";\n  Databind.for(row, \"g_MyModModel.rows\", \"entry\");\n  const label = document.createElement(\"div\");\n  Databind.locText(label, \"entry.name\");\n  const value = document.createElement(\"div\");\n  Databind.value(value, \"entry.value\");\n  Databind.classToggle(row, \"my-mod-row--hot\", \"{{entry.hot}}\");\n  row.append(label, value);\n  container.appendChild(row);\n}\n\nexport function setRows(rows) {\n  model.rows = rows;\n  engine.synchronizeModels();\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "The update semantics are undocumented. If bound DOM does not change, call engine.synchronizeModels() after mutating the model.",
+        "Model names are global: prefix them with your mod id."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 24,
+        "note": "found in 24 of 1249 corpus mods (their code contains the idiom) (Databind); 17 register a JSModel"
+      },
+      "objects": [
+        "engine",
+        "Databind"
+      ],
+      "related": [
+        "define-and-push-screen",
+        "ui-next-solid-screens"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "ui-next-solid-screens",
+      "title": "Build whole screens with ui-next (Solid)",
+      "category": "new-ui",
+      "purpose": "Write a new or rebuilt screen with the game's own Solid component library.",
+      "why": "The game ships Solid and a component set under core/ui-next (buttons, frames, scroll areas, tabs, tooltips). Components you register by name, or mount under a tag, behave like vanilla ones.",
+      "when": "You own a whole screen and want the same components and reactivity vanilla uses.",
+      "whenNot": "You only extend a vanilla screen (capture and wrap it instead), or you have no build step for JSX.",
+      "snippet": "import { createSignal, createEffect } from \"/core/vendor/solid-js/dist/solid.js\";\nimport { ComponentRegistry } from \"/core/ui-next/services/component-registry.js\";\n\n// Hand-written for brevity; normally you write JSX and compile it with the Solid toolchain.\nfunction MyModCounter() {\n  const [count, setCount] = createSignal(0);\n  const el = document.createElement(\"fxs-button\");\n  el.classList.add(\"my-mod-counter\");\n  el.addEventListener(\"action-activate\", () => setCount(count() + 1));\n  createEffect(() => el.setAttribute(\"caption\", String(count())));\n  return el;\n}\n\nComponentRegistry.register({ name: \"MyModCounter\", createInstance: MyModCounter });",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Import the vendored Solid that the game ships, never a second copy: two Solid runtimes do not share reactivity.",
+        "ReplaceUIScript, which older guides use to swap a vanilla screen, is a Civ VI action verb. Civ VII has no handler for it and the action group does nothing.",
+        "Component and service paths under core/ui-next move between patches; check them against the installed game (see import-current-paths)."
+      ],
+      "status": "works",
+      "statusNote": "1.5.0 moved more vanilla screens into ui-next.",
+      "evidence": {
+        "mods": 166,
+        "note": "found in 166 of 1249 corpus mods (their code contains the idiom) (imports from ui-next or the vendored Solid)"
+      },
+      "objects": [
+        "ComponentRegistry"
+      ],
+      "related": [
+        "componentregistry-override",
+        "import-current-paths",
+        "modinfo-action-verbs"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "custom-interface-mode",
+      "title": "A custom interface mode for map interactions",
+      "category": "new-ui",
+      "purpose": "Build a pick-a-plot or place-a-thing flow that behaves like the game's own targeting.",
+      "why": "InterfaceMode.addHandler registers a handler object under a mode name; InterfaceMode.switchTo enters it, and the handler's transition and input methods run while it is active. Subclassing a vanilla mode such as ChoosePlotInterfaceMode gives you cursor and cancel handling for free.",
+      "when": "Multi-step map input: choose a plot, confirm, cancel.",
+      "whenNot": "To change a vanilla mode. addHandler is last-write-wins per mode name, so only one mod can own a vanilla mode.",
+      "snippet": "import { InterfaceMode } from \"/core/ui/interface-modes/interface-modes.js\";\n\nconst MODE = \"MY_MOD_INTERFACEMODE_PICK\";\n\nclass MyModPickMode {\n  transitionTo(_oldMode, _newMode, context) { this.context = context; }\n  transitionFrom() { this.context = null; }\n  canEnterMode() { return true; }\n  canLeaveMode() { return true; }\n}\n\nInterfaceMode.addHandler(MODE, new MyModPickMode());\nexport const startPicking = (context) => InterfaceMode.switchTo(MODE, context);",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Opening the game's dialog box over your mode switches the map back to the default mode and your selection is lost. Draw confirmations as your own element instead.",
+        "Use a new mode name with your mod's prefix rather than replacing a vanilla one."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 11,
+        "note": "found in 11 of 1249 corpus mods (their code contains the idiom); the dialog-box behaviour was watched on 1.5.0"
+      },
+      "objects": [
+        "InterfaceMode"
+      ],
+      "related": [
+        "define-and-push-screen",
+        "input-handler-enum"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "raw-keydown-hotkeys",
+      "title": "Raw keydown listeners for hotkeys",
+      "category": "new-ui",
+      "purpose": "What to do instead of document or window keydown listeners for a mod's hotkey.",
+      "why": "A raw keydown listener bypasses the game's input actions: the player cannot rebind it, it fires while other screens have focus, and it collides with keys the game already uses. Input actions are data in the config database, and the game raises an engine-input event with the action's name.",
+      "when": "Declare the action in a shell-scope UpdateDatabase file, give it a default gesture, and react to it on engine-input.",
+      "whenNot": "",
+      "snippet": "<Database>\n  <InputActions>\n    <Row ActionId=\"my-mod-toggle\" DeviceType=\"Keyboard\"\n         Name=\"LOC_MY_MOD_TOGGLE_NAME\" Description=\"LOC_MY_MOD_TOGGLE_DESC\" />\n  </InputActions>\n  <InputActionDefaultGestures>\n    <Row ActionId=\"my-mod-toggle\" Index=\"0\" GestureType=\"KBMouse\" GestureData=\"KEY_CONTROL+KEY_M\" />\n  </InputActionDefaultGestures>\n</Database>\n<!-- In a UIScript:\nwindow.addEventListener(\"engine-input\", (e) => {\n  if (e.detail.name === \"my-mod-toggle\" && e.detail.status === InputActionStatuses.FINISH) toggle();\n}); -->",
+      "snippetLang": "xml",
+      "pitfalls": [
+        "The InputActions tables live in the config database, so the file goes in a shell-scope action group.",
+        "Give the action LOC name and description tags, or the key-binding screen shows raw tags.",
+        "Prefix the action id with your mod id; three corpus mods register the same action id and collide."
+      ],
+      "status": "works",
+      "statusNote": "Raw keydown listeners still fire on 1.5.0; the problem is what they bypass.",
+      "evidence": {
+        "mods": 80,
+        "note": "found in 80 of 1249 corpus mods (their code contains the idiom) use raw keydown listeners; 46 declare input actions in data"
+      },
+      "objects": [
+        "InputActionStatuses",
+        "window"
+      ],
+      "related": [
+        "input-handler-enum",
+        "namespace-everything"
+      ],
+      "kind": "avoid"
+    },
+    {
+      "id": "input-handler-enum",
+      "title": "Booleans from engine input handlers",
+      "category": "new-ui",
+      "purpose": "What to return from an engine input handler, and how to register one.",
+      "why": "ContextManager asks each registered engine input handler in order and stops at the first whose handleInput result == InputHandlerState.Handled (1). The comparison is loose, so returning true counts as Handled. Component-style code returns true to mean 'still live, pass it on', which in this list means 'swallowed'. Inserting yourself at the front of the handler list makes it worse.",
+      "when": "Return InputHandlerState.Active for input you do not use and InputHandlerState.Handled only for input you consumed; register with ContextManager.registerEngineInputHandler.",
+      "whenNot": "",
+      "snippet": "import ContextManager from \"/core/ui/context-manager/context-manager.js\";\nimport { InputHandlerState } from \"/core/ui/input/input-support.js\";\n\nconst myModInput = {\n  handleInput(inputEvent) {\n    if (!isMyModPanelOpen()) return InputHandlerState.Active;\n    if (inputEvent.detail.name === \"cancel\") {\n      closeMyModPanel();\n      return InputHandlerState.Handled;\n    }\n    return InputHandlerState.Active;\n  },\n  handleNavigation() { return InputHandlerState.Active; },\n};\n\nContextManager.registerEngineInputHandler(myModInput);",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Do not unshift into ContextManager.engineInputEventHandlers to jump the queue.",
+        "A handler that answers Handled while its panel is closed eats Escape, keybinds and unit orders for the whole game."
+      ],
+      "status": "works",
+      "statusNote": "The loose comparison is in the 1.5.0 context manager source.",
+      "evidence": {
+        "mods": null,
+        "note": "read statically in one corpus mod that matches player reports of dead Escape and keybinds after 1.5.0; not reproduced in game"
+      },
+      "objects": [
+        "ContextManager",
+        "InputHandlerState"
+      ],
+      "related": [
+        "raw-keydown-hotkeys",
+        "custom-interface-mode"
+      ],
+      "kind": "avoid"
+    },
+    {
+      "id": "engine-event-subscription",
+      "title": "Subscribe to engine events and clean up",
+      "category": "lifecycle-and-events",
+      "purpose": "React to game events (turns, cities, units, plots) without leaking listeners.",
+      "why": "engine.on returns a handle and also accepts engine.off with the same function and context. Inside a component, this.Root.listenForEngineEvent and listenForWindowEvent store the handles and remove them on detach for you.",
+      "when": "Inside a Panel or component: listenForEngineEvent. In a module-scope script: keep the handle and clear it.",
+      "whenNot": "You need a reaction to something the game does not raise as an event; poll on a turn event, not a timer.",
+      "snippet": "import Panel from \"/core/ui/panel-support.js\";\n\nclass MyModPanel extends Panel {\n  onAttach() {\n    super.onAttach();\n    // Removed automatically when the panel detaches.\n    this.Root.listenForEngineEvent(\"PlayerTurnActivated\", this.onTurn, this);\n    this.Root.listenForWindowEvent(\"my-mod-refresh\", () => this.refresh());\n  }\n  onTurn(data) {\n    if (data.player === GameContext.localPlayerID) this.refresh();\n  }\n  refresh() {}\n}\n\n// Module scope: keep the handle.\nconst cityHandle = engine.on(\"CityAddedToMap\", (data) => console.warn(\"my-mod city\", data.cityID));\nengine.on(\"BeforeUnload\", () => cityHandle.clear());",
+      "snippetLang": "js",
+      "pitfalls": [
+        "engine.off must get the same function reference (and context) that engine.on got; a fresh bind() does not match.",
+        "Many events fire for every player. UnitMoved arrives for units the local player cannot see; filter by player.",
+        "Under Autoplay GameContext.localPlayerID reads -1; compare turn events against GameContext.localObserverID if your code must run then.",
+        "engine.trigger accepts any name and the engine does not validate it, so a typo in an event name fails silently."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 335,
+        "note": "found in 335 of 1249 corpus mods (their code contains the idiom); 36 use listenForEngineEvent"
+      },
+      "objects": [
+        "engine",
+        "Panel",
+        "GameContext"
+      ],
+      "related": [
+        "typed-custom-events",
+        "whenready-bootstrap"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "whenready-bootstrap",
+      "title": "Start on engine.whenReady",
+      "category": "lifecycle-and-events",
+      "purpose": "Run setup code only once the engine globals and managers your script touches exist.",
+      "why": "engine.whenReady is a promise the UI runtime resolves when the engine is ready, so code chained on it neither runs too early on a slow load nor waits for nothing on a fast one.",
+      "when": "Any setup that reads game state, patches a manager, or imports optional modules.",
+      "whenNot": "Plain registrations (Controls.define, Controls.decorate, ComponentRegistry.register) that must happen at module load so they are in place before the first instance is built.",
+      "snippet": "let started = false;\n\nfunction startMyMod() {\n  if (started) return;\n  started = true;\n  // read GameInfo, patch managers, import optional integrations\n}\n\nengine.whenReady.then(startMyMod).catch((err) => console.error(\"my-mod start failed\", err));",
+      "snippetLang": "js",
+      "pitfalls": [
+        "A screen defined after whenReady is not initialized on 1.5.0 unless its definition sets initializeImmediately.",
+        "Make start idempotent: UI.reloadUI() and age transitions run every UIScript again on a new page.",
+        "An age transition rebuilds the JS heap and globalThis; nothing in memory survives it."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 190,
+        "note": "found in 190 of 1249 corpus mods (their code contains the idiom)"
+      },
+      "objects": [
+        "engine"
+      ],
+      "related": [
+        "settimeout-bootstrap",
+        "idempotent-patch-guard",
+        "define-and-push-screen"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "settimeout-bootstrap",
+      "title": "Timer-based bootstrap",
+      "category": "lifecycle-and-events",
+      "purpose": "Why not to wait a fixed time before patching or reading engine objects.",
+      "why": "setTimeout(fn, 1000) races the UI load: on a slow machine or a big save it fires before the object exists and the patch silently does nothing; on a fast one it only adds a delay. A promise or event that marks readiness has no race.",
+      "when": "Use engine.whenReady, or the specific event or registration your code depends on (for example retry until LensManager.layers has your target, then stop).",
+      "whenNot": "",
+      "snippet": "// Instead of: setTimeout(patchRibbon, 1000);\nengine.whenReady.then(() => {\n  const target = findPatchTarget();\n  if (!target) {\n    console.error(\"my-mod: patch target missing, staying vanilla\");\n    return;\n  }\n  patchRibbon(target);\n});",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Adding a delay on top of whenReady is paranoia that hides the real dependency; name what you are waiting for."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "the race is described in the corpus research; several corpus mods still bootstrap on a timer"
+      },
+      "objects": [
+        "engine"
+      ],
+      "related": [
+        "whenready-bootstrap"
+      ],
+      "kind": "avoid"
+    },
+    {
+      "id": "typed-custom-events",
+      "title": "Typed events and the two buses",
+      "category": "lifecycle-and-events",
+      "purpose": "Message between your own scripts with names that are greppable and payloads with a known shape.",
+      "why": "A CustomEvent subclass that fills detail in its constructor, exported with a name constant, makes the event a contract both sides import. Window events are the DOM bus inside the UI page; engine.trigger and engine.on are the engine's UI bus. They do not cross.",
+      "when": "Any cross-file notification inside your mod: model changed, settings changed, open a panel.",
+      "whenNot": "Talking to the game itself: neither bus reaches gameplay, and window.dispatchEvent never reaches engine.on.",
+      "snippet": "export const MyModDataChangedEventName = \"my-mod-data-changed\";\n\nexport class MyModDataChangedEvent extends CustomEvent {\n  constructor(reason) {\n    super(MyModDataChangedEventName, { bubbles: false, cancelable: false, detail: { reason } });\n  }\n}\n\n// Emitter\nwindow.dispatchEvent(new MyModDataChangedEvent(\"turn\"));\n\n// Listener\nwindow.addEventListener(MyModDataChangedEventName, (e) => console.warn(\"my-mod\", e.detail.reason));",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Prefix event names with your mod id.",
+        "engine.trigger accepts any name and nothing in the engine consumes it; it is a bus between UI scripts, not a way to raise new game events."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 35,
+        "note": "found in 35 of 1249 corpus mods (their code contains the idiom) (CustomEvent subclasses); 276 use window events"
+      },
+      "objects": [
+        "window",
+        "engine"
+      ],
+      "related": [
+        "engine-event-subscription",
+        "namespace-everything"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "shared-modsettings",
+      "title": "One shared modSettings key in localStorage",
+      "category": "persist-data",
+      "purpose": "Keep per-install UI settings in localStorage without breaking every other mod's settings.",
+      "why": "On 1.5.0 localStorage.getItem ignores the key and returns the value of the first key in sort order. With exactly one key in the store, reads are correct; with two, every mod reads the wrong blob. The community answer is one key, modSettings, holding an object with one slice per mod id.",
+      "when": "UI preferences that belong to the install, not to a save.",
+      "whenNot": "State that must match the game (use save-scoped-properties), or data large enough to matter if another mod rewrites the shared object.",
+      "snippet": "const KEY = \"modSettings\";\nconst MOD_ID = \"my-mod\";\n\nfunction readAll() {\n  try {\n    const parsed = JSON.parse(localStorage.getItem(KEY) || \"{}\");\n    return parsed && typeof parsed === \"object\" && !Array.isArray(parsed) ? parsed : {};\n  } catch { return {}; }\n}\n\nexport function loadSettings(defaults) {\n  const mine = readAll()[MOD_ID];\n  return mine && typeof mine === \"object\" ? { ...defaults, ...mine } : { ...defaults };\n}\n\nexport function saveSettings(settings) {\n  const all = readAll();\n  all[MOD_ID] = settings;\n  localStorage.setItem(KEY, JSON.stringify(all));\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Never add a second top-level key, not even a version marker: it changes what getItem returns for everyone.",
+        "Shape-check what you read before writing it back, so a foreign blob returned by the aliasing bug is never copied into your slice.",
+        "Some copies of the shared helper call localStorage.clear() when more than one key exists. That repairs reads but destroys other mods' data; do it only with the player's consent.",
+        "localStorage.length is honest; key(i) and Object.keys(localStorage) are not usable for enumeration."
+      ],
+      "status": "works",
+      "statusNote": "The key aliasing that makes the one-key rule necessary was watched on 1.5.0.",
+      "evidence": {
+        "mods": 133,
+        "note": "found in 133 of 1249 corpus mods (their code contains the idiom); the aliasing and the restart behaviour were watched on 1.5.0"
+      },
+      "objects": [
+        "localStorage"
+      ],
+      "related": [
+        "separate-localstorage-keys",
+        "versioned-options",
+        "save-scoped-properties"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "separate-localstorage-keys",
+      "title": "Your own top-level localStorage key",
+      "category": "persist-data",
+      "purpose": "Why a mod must not write its own localStorage key.",
+      "why": "getItem returns the first key in sort order whatever key it is asked for. A new key that sorts before modSettings makes every settings-style mod read your blob, and a read-modify-write by any of them copies it into their slice.",
+      "when": "Store your data as a slice of the shared modSettings object instead.",
+      "whenNot": "",
+      "snippet": "// Avoid\nlocalStorage.setItem(\"__MY_MOD_STATE__\", JSON.stringify(state));\n\n// Do\nconst all = JSON.parse(localStorage.getItem(\"modSettings\") || \"{}\");\nall[\"my-mod\"] = state;\nlocalStorage.setItem(\"modSettings\", JSON.stringify(all));",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Property-style writes (localStorage[k] = v) did not survive a restart on 1.5.0."
+      ],
+      "status": "works",
+      "statusNote": "The write lands; the damage is to every other reader.",
+      "evidence": {
+        "mods": null,
+        "note": "aliasing watched on 1.5.0; at least one corpus mod writes its own key"
+      },
+      "objects": [
+        "localStorage"
+      ],
+      "related": [
+        "shared-modsettings"
+      ],
+      "kind": "avoid"
+    },
+    {
+      "id": "versioned-options",
+      "title": "Versioned settings with forward migration",
+      "category": "persist-data",
+      "purpose": "Change the shape of your saved settings or history between releases without losing the player's data.",
+      "why": "Your slice of the shared object outlives your code. Storing a schema version beside the data lets each release fold older shapes forward on load, and validating after the write catches a store that did not take it.",
+      "when": "Any persisted settings or history that will change shape in a later release; option-screen values you mirror into your slice.",
+      "whenNot": "Throwaway caches that can simply be rebuilt.",
+      "snippet": "const SCHEMA = 3;\nconst migrations = {\n  1: (s) => ({ ...s, showLabels: s.labels ?? true }),\n  2: (s) => ({ ...s, opacity: Math.min(1, Math.max(0, s.opacity ?? 0.8)) }),\n};\n\nexport function upgrade(stored, defaults) {\n  if (!stored || typeof stored !== \"object\") return { v: SCHEMA, data: { ...defaults } };\n  let v = Number.isInteger(stored.v) ? stored.v : 1;\n  let data = { ...defaults, ...(stored.data ?? stored) };\n  while (v < SCHEMA) {\n    data = migrations[v] ? migrations[v](data) : data;\n    v++;\n  }\n  return { v: SCHEMA, data };\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Never write a newer schema back unless you could read the old one; a downgrade then sees data it does not understand. Keep unknown fields.",
+        "Hydrate the Options screen from your stored slice at boot instead of relying on UI.setOption to have kept the value.",
+        "Options.addInitCallback throws if options were already initialized; register option callbacks at module load.",
+        "Keep the slice small; every mod's read-modify-write copies the whole shared object."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "hand-read in corpus stats and settings mods that migrate a versioned slice; Options.addInitCallback's throw is in the 1.5.0 source"
+      },
+      "objects": [
+        "localStorage",
+        "Options"
+      ],
+      "related": [
+        "shared-modsettings",
+        "ui-setoption-for-mod-keys",
+        "mods-options-category"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "save-scoped-properties",
+      "title": "Save-scoped state with GameTutorial properties",
+      "category": "persist-data",
+      "purpose": "Keep state that must travel with the save game (custom names, per-game counters) rather than with the install.",
+      "why": "GameTutorial.setProperty stores a value under a hash in the game state, so it is written into the save and read back on load, for every player of a hotseat game. Database.makeHash turns your namespaced key into the hash.",
+      "when": "Per-game data that must match the save: names, flags, small counters.",
+      "whenNot": "Data that must survive an age transition, or large histories.",
+      "snippet": "const PREFIX = \"my-mod:\";\nconst hashOf = (key) => Database.makeHash(PREFIX + key);\n\nexport function readSaved(key, fallback) {\n  const raw = GameTutorial.getProperty(hashOf(key));\n  if (raw == null || raw === \"\") return fallback;\n  try { return JSON.parse(raw); } catch { return fallback; }\n}\n\nexport function writeSaved(key, value) {\n  GameTutorial.setProperty(hashOf(key), JSON.stringify(value));\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Properties are wiped at the age transition. Keep only per-age data here, or carry it across yourself.",
+        "Some reloads returned empty or a stale snapshot; treat an empty read as unknown, not as zero.",
+        "This repurposes a store meant for the tutorial; namespace every key so you cannot collide with it."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 51,
+        "note": "found in 51 of 1249 corpus mods (their code contains the idiom); survival across save and load and the wipe at the age transition were watched"
+      },
+      "objects": [
+        "GameTutorial",
+        "Database"
+      ],
+      "related": [
+        "shared-modsettings",
+        "versioned-options"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "ui-setoption-for-mod-keys",
+      "title": "UI.setOption for a mod's own settings",
+      "category": "persist-data",
+      "purpose": "Why a mod's own option names do not persist through UI.setOption.",
+      "why": "The option list is compiled into the game. UI.setOption with a name the game does not define holds the value in memory until the game quits and is then dropped; UI.getOption also ignores the section for those names, so two mods' keys can share one value.",
+      "when": "Store your settings in your modSettings slice and show them through the Options screen.",
+      "whenNot": "",
+      "snippet": "// Avoid: lost at restart\nUI.setOption(\"user\", \"Mod\", \"MyModShowLabels\", 1);\n\n// Do: keep the value in your own slice and hydrate the Options screen from it\nsaveSettings({ ...loadSettings(DEFAULTS), showLabels: true });",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Several corpus mods report UI.getOption returning null for their own keys; this is the cause."
+      ],
+      "status": "dead",
+      "statusNote": "Watched on 1.5.0: unregistered option names do not survive a restart.",
+      "evidence": {
+        "mods": null,
+        "note": "used by 60 corpus mods (some for real game options); the restart loss was watched on 1.5.0"
+      },
+      "objects": [
+        "UI"
+      ],
+      "related": [
+        "shared-modsettings",
+        "versioned-options"
+      ],
+      "kind": "avoid"
+    },
+    {
+      "id": "cross-mod-detection",
+      "title": "Ask the mod system which mods are active",
+      "category": "cross-mod",
+      "purpose": "Know whether another mod is enabled before anything renders, to adapt or to warn about a conflict.",
+      "why": "Modding.getActiveMods returns handles for the active mods and Modding.getModInfo(handle) gives each one's id. The pause menu uses the same pair to list active content.",
+      "when": "Compatibility switches, conflict warnings, optional features that need another mod.",
+      "whenNot": "You only need the other mod's code: try an optional import instead.",
+      "snippet": "export function activeModIds() {\n  try {\n    return new Set(\n      Modding.getActiveMods()\n        .map((handle) => Modding.getModInfo(handle))\n        .filter(Boolean)\n        .map((info) => info.id)\n    );\n  } catch (err) {\n    console.error(\"my-mod: could not list active mods\", err);\n    return new Set();\n  }\n}\n\nconst KNOWN_CONFLICTS = [\"some-other-mod-id\"];\nexport const conflicts = () => KNOWN_CONFLICTS.filter((id) => activeModIds().has(id));",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Sniffing the DOM for another mod's elements only answers after it has rendered, and breaks when it renames them.",
+        "A conflict guard that blocks starting a game should explain itself and offer a way out; never disable another mod silently."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "hand-read in corpus mods; the same calls appear in the 1.5.0 pause menu"
+      },
+      "objects": [
+        "Modding"
+      ],
+      "related": [
+        "optional-dynamic-import",
+        "namespace-everything"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "optional-dynamic-import",
+      "title": "Optional integration through a caught dynamic import",
+      "category": "cross-mod",
+      "purpose": "Use another mod's module when it is installed and carry on without it when it is not.",
+      "why": "import() of a path that is not served rejects instead of failing your module, so you can catch it and fall back. Probing a version field the other mod exports lets you refuse an incompatible version.",
+      "when": "Soft dependencies between mods, add-ons that extend a host mod.",
+      "whenNot": "A static import of another mod's file: if that mod is absent or disabled, your whole module fails to load.",
+      "snippet": "const HOST = \"/some-host-mod/ui/host-api.js\";\n\nengine.whenReady.then(async () => {\n  let api = null;\n  try {\n    const mod = await import(HOST);\n    if ((mod.default?.apiVersion ?? 0) >= 2) api = mod.default;\n  } catch {\n    // host not installed or not enabled\n  }\n  startMyMod(api); // api === null means run standalone\n});",
+      "snippetLang": "js",
+      "pitfalls": [
+        "A module that is served but throws while loading also rejects; log the error rather than treating every rejection as 'not installed'.",
+        "If you publish an API for others, export a version number with it.",
+        "Pair it with cross-mod-detection when you need to know before anything loads."
+      ],
+      "status": "works",
+      "statusNote": "A dynamic import of a removed vanilla chunk bundle rejects the same way on 1.5.0.",
+      "evidence": {
+        "mods": 28,
+        "note": "found in 28 of 1249 corpus mods (their code contains the idiom)"
+      },
+      "objects": [
+        "engine"
+      ],
+      "related": [
+        "cross-mod-detection",
+        "cooperative-global-registry",
+        "import-current-paths"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "cooperative-global-registry",
+      "title": "Cooperative global registries",
+      "category": "cross-mod",
+      "purpose": "Let several mods contribute entries to one shared table without any of them owning it.",
+      "why": "Each mod merges its rows into the existing global with a spread and a fallback, so whichever loads first creates the object and later ones add to it. Load order does not matter in either direction.",
+      "when": "A table many mods add to: portrait mappings, icon overrides, lists of extra entries a host mod reads.",
+      "whenNot": "Your own mod's internal API. A single-owner global (globalThis.MyMod = {...}) is fine there, but namespace it and assign it once.",
+      "snippet": "globalThis.MyModRegistry = {\n  ...(globalThis.MyModRegistry || {}),\n  UNIT_MY_MOD_SCOUT: { portrait: \"UNIT_SCOUT\", background: \"my-mod-bg\" },\n};\n\n// Reader side, at use time rather than load time:\nexport const lookup = (unitType) => (globalThis.MyModRegistry || {})[unitType];",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Read the registry when you need it, not once at load: contributors may load after you.",
+        "Agree on the global's name and row shape in your documentation; nothing enforces it.",
+        "Globals are rebuilt on every page load and age transition; re-register each time."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 206,
+        "note": "found in 206 of 1249 corpus mods (their code contains the idiom) use globalThis or window namespaces; the merge-into-shared-global form is rarer"
+      },
+      "objects": [
+        "globalThis"
+      ],
+      "related": [
+        "namespace-everything",
+        "optional-dynamic-import"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "namespace-everything",
+      "title": "Namespace everything you register",
+      "category": "cross-mod",
+      "purpose": "Keep your ids out of other mods' way.",
+      "why": "Component tags, input actions, registry names, globals, events, CSS classes, database types, LOC tags and file basenames all share one namespace per game. Imports also resolve by basename: two mods shipping a file with the same name can get one copy between them.",
+      "when": "Every name you introduce.",
+      "whenNot": "Names you deliberately share (modSettings, a cooperative registry).",
+      "snippet": "// Tags, ids, events, classes\nControls.define(\"my-mod-panel\", { createInstance: MyModPanel });\nconst EVENT = \"my-mod-refresh\";\nconst CSS_ROOT = \"my-mod-root\";\n\n// Files: prefix basenames too\n//   ui/my-mod-options.js   not   ui/mod-options.js\n\n// Data\n//   TYPE: BUILDING_MY_MOD_GRANARY\n//   LOC:  LOC_MY_MOD_GRANARY_NAME",
+      "snippetLang": "js",
+      "pitfalls": [
+        "A shared basename such as mod-options.js has broken unrelated mods when the copies differ.",
+        "Three corpus cheat panels register the same component tag and input action and cannot run together."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "collisions read in the corpus; basename sharing watched"
+      },
+      "objects": [
+        "Controls",
+        "ComponentRegistry",
+        "globalThis"
+      ],
+      "related": [
+        "cooperative-global-registry",
+        "loc-tags-unique",
+        "raw-keydown-hotkeys"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "mods-options-category",
+      "title": "A shared Mods category in Options",
+      "category": "cross-mod",
+      "purpose": "Show your settings on the game's Options screen next to other mods' settings.",
+      "why": "The Options model takes option rows through Options.addOption inside init callbacks. The community adds one shared Mods category; whichever mod loads first creates it and the rest add groups to it.",
+      "when": "Player-facing settings.",
+      "whenNot": "Debug toggles nobody else should see.",
+      "snippet": "import { Options, OptionType, CategoryType } from \"/core/ui/options/model-options.js\";\nimport { CategoryData } from \"/core/ui/options/options-helpers.js\";\n\nif (!CategoryType.Mods) {\n  CategoryType.Mods = \"mods\";\n  CategoryData[CategoryType.Mods] = { title: \"LOC_UI_CONTENT_MGR_SUBTITLE\", description: \"LOC_UI_CONTENT_MGR_SUBTITLE_DESCRIPTION\" };\n}\n\nOptions.addInitCallback(() => {\n  Options.addOption({\n    category: CategoryType.Mods,\n    group: \"my_mod\",\n    type: OptionType.Checkbox,\n    id: \"my-mod-show-labels\",\n    label: \"LOC_MY_MOD_SHOW_LABELS\",\n    initListener: (info) => { info.currentValue = loadSettings(DEFAULTS).showLabels; },\n    updateListener: (_info, value) => saveSettings({ ...loadSettings(DEFAULTS), showLabels: value }),\n  });\n});",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Guard the category creation so you never overwrite one another mod made.",
+        "Options.addInitCallback throws once options are initialized; call it at module load.",
+        "Persist the value yourself (shared-modsettings); UI.setOption does not keep a mod's own names."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 94,
+        "note": "found in 94 of 1249 corpus mods (their code contains the idiom)"
+      },
+      "objects": [
+        "Options",
+        "CategoryType",
+        "OptionType"
+      ],
+      "related": [
+        "shared-modsettings",
+        "versioned-options"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "closure-wrap-patching",
+      "title": "Wrap a method, always call the original",
+      "category": "patch-safely",
+      "purpose": "Change what a vanilla manager or class method does when no registration point exists.",
+      "why": "Saving the original function in a closure and installing a wrapper that calls it keeps vanilla behaviour and lets other mods' wrappers stack: each wraps whatever was there before.",
+      "when": "Deep manager behaviour with no decorator or registry hook. Prefer patching the live instance the engine hands you (a lens layer from LensManager.layers.get, a singleton export) over the class prototype when you only need that one object.",
+      "whenNot": "A decorator, ComponentRegistry wrap or registry priority can do it.",
+      "snippet": "export function wrapMethod(target, name, wrapper) {\n  const original = target?.[name];\n  if (typeof original !== \"function\") {\n    console.error(`my-mod: ${name} not found, staying vanilla`);\n    return false;\n  }\n  target[name] = function (...args) {\n    return wrapper.call(this, original, args);\n  };\n  return true;\n}\n\nwrapMethod(SomeManagerClass.prototype, \"refresh\", function (original, args) {\n  const result = original.apply(this, args);\n  // add your behaviour after vanilla's\n  return result;\n});",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Never skip or reorder the original call unless that is the whole point; other mods' wrappers sit inside it.",
+        "Listeners vanilla bound before your patch still point at the old function. If a button was wired to the method, re-wire it to the wrapped one in your decorator.",
+        "Two mods wrapping a native engine singleton method have no coordination at all; keep such wraps minimal.",
+        "Patch once (see idempotent-patch-guard) and resolve the target at runtime (see version-resilient-binding)."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 146,
+        "note": "found in 146 of 1249 corpus mods (their code contains the idiom) (prototype patching)"
+      },
+      "objects": [
+        "Controls",
+        "LensManager"
+      ],
+      "related": [
+        "idempotent-patch-guard",
+        "version-resilient-binding",
+        "line-number-coupling"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "idempotent-patch-guard",
+      "title": "Guard patches against running twice",
+      "category": "patch-safely",
+      "purpose": "Make a patch safe to run more than once: after UI reloads, from retry loops, or when two of your files load it.",
+      "why": "Wrapping an already wrapped method doubles every effect. Stamping the patched object with a private flag that holds your version lets a second run bail, and lets a newer version of your mod replace an older patch.",
+      "when": "Every monkey patch and every one-time DOM or style injection.",
+      "whenNot": "",
+      "snippet": "const FLAG = Symbol.for(\"my-mod.patched\");\nconst VERSION = \"1.4.0\";\n\nexport function patchOnce(target, apply) {\n  if (!target) return false;\n  if (target[FLAG] === VERSION) return false; // this version already patched it\n  apply(target);\n  Object.defineProperty(target, FLAG, { value: VERSION, configurable: true });\n  return true;\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "A boolean flag left by an older version of your mod makes the newer one skip its patch; store the version.",
+        "Symbol.for keys survive module re-imports within one page; they do not survive a page reload, which is correct because the patched object is rebuilt too."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "hand-read: invented independently in at least three corpus mods, with a version-stamped variant in a fourth"
+      },
+      "objects": [],
+      "related": [
+        "closure-wrap-patching",
+        "whenready-bootstrap"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "version-resilient-binding",
+      "title": "Bind to vanilla at runtime, not by static import",
+      "category": "patch-safely",
+      "purpose": "Survive a patch that un-exports, renames or moves what you patch.",
+      "why": "A static import of a name the game no longer exports fails the whole module. Resolving the class through the component registry or customElements, and accepting more than one API shape, degrades to vanilla with a log line instead.",
+      "when": "Anything you patch or call that is not a stable public global.",
+      "whenNot": "Stable globals the engine injects (Players, GameInfo, engine).",
+      "snippet": "function resolveComponentClass(tag) {\n  return Controls.getDefinition(tag)?.createInstance\n    ?? customElements.get(tag)\n    ?? null;\n}\n\nfunction firstWorking(candidates) {\n  for (const [obj, fn] of candidates) {\n    if (obj && typeof obj[fn] === \"function\") return (...a) => obj[fn](...a);\n  }\n  return null;\n}\n\nconst DockClass = resolveComponentClass(\"panel-sub-system-dock\");\nif (!DockClass) console.error(\"my-mod: dock class not found, feature off\");",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Validate the shape you expect (methods exist, arity) before patching; log once and stay vanilla when it does not match.",
+        "Check your imports against the installed game after every patch (see import-current-paths)."
+      ],
+      "status": "works",
+      "statusNote": "1.4.0 un-exported at least one class corpus mods patched; 1.5.0 removed every chunk bundle.",
+      "evidence": {
+        "mods": null,
+        "note": "hand-read in several corpus mods, one of which documents a full safety model for its patches"
+      },
+      "objects": [
+        "Controls",
+        "customElements"
+      ],
+      "related": [
+        "closure-wrap-patching",
+        "import-current-paths",
+        "idempotent-patch-guard"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "line-number-coupling",
+      "title": "Coupling to vanilla internals",
+      "category": "patch-safely",
+      "purpose": "Why patches that depend on vanilla internals line by line rot every patch.",
+      "why": "A patch that copies vanilla method bodies, relies on private field names across many methods, or documents the vanilla line numbers it depends on has to be re-verified by hand after each game update, and fails silently when it is not.",
+      "when": "Wrap whole public methods and work with their inputs and outputs; when you must reach a private field, read it defensively and log when it is missing.",
+      "whenNot": "",
+      "snippet": "// Avoid: re-implementing a vanilla method with one line changed.\n// Do: wrap it and adjust the result.\nwrapMethod(BannerClass.prototype, \"setVisibility\", function (original, args) {\n  original.apply(this, args);\n  if (shouldForceVisible(this)) this.Root?.classList.remove(\"hidden\");\n});",
+      "snippetLang": "js",
+      "pitfalls": [
+        "A forked copy of a vanilla function keeps the old behaviour after the game fixes a bug in the original."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "one corpus mod depends on documented vanilla line numbers across more than five methods"
+      },
+      "objects": [],
+      "related": [
+        "closure-wrap-patching",
+        "same-path-shadowing"
+      ],
+      "kind": "avoid"
+    },
+    {
+      "id": "same-path-shadowing",
+      "title": "Replacing whole vanilla files",
+      "category": "patch-safely",
+      "purpose": "Why shipping a file at a vanilla path (or a fork of a vanilla module) should be the last resort.",
+      "why": "An ImportFiles item at a vanilla path silently replaces that file for every importer. Only one mod can win a path, the override leaves no log line, and the copy goes stale: it keeps the old code after the game changes the original, even when every import still resolves.",
+      "when": "Decorate, wrap a method, or wrap a registered component. If you truly must replace a file, replace the smallest one and diff it against each new game version.",
+      "whenNot": "",
+      "snippet": "<!-- Avoid: a fork of a vanilla module at its own path -->\n<ImportFiles>\n  <Item>core/ui/camera/camera-controller.js</Item>\n</ImportFiles>\n\n<!-- Do: load your own script and wrap the method you need -->\n<UIScripts>\n  <Item>ui/my-mod-camera-tweak.js</Item>\n</UIScripts>",
+      "snippetLang": "xml",
+      "pitfalls": [
+        "Forks of 1,200 to 4,000 lines for a twenty-line change appear in the corpus; every vanilla fix after the fork is lost.",
+        "Two mods replacing the same file is a hard conflict that neither can detect."
+      ],
+      "status": "works",
+      "statusNote": "Still loads on 1.5.0; this is now the main source of hard conflicts between mods.",
+      "evidence": {
+        "mods": 109,
+        "note": "found in 109 of 1249 corpus mods (their code contains the idiom) replace at least one vanilla file"
+      },
+      "objects": [],
+      "related": [
+        "decorate-dont-replace",
+        "closure-wrap-patching",
+        "line-number-coupling"
+      ],
+      "kind": "avoid"
+    },
+    {
+      "id": "lens-registration",
+      "title": "Register a lens and a lens layer",
+      "category": "map-and-lenses",
+      "purpose": "Paint information onto the map in a way that composes with vanilla and other mods' lenses.",
+      "why": "LensManager keeps registries of lenses and layers. A lens names the layers it shows; a layer implements initLayer, applyLayer and removeLayer and draws through a WorldUI overlay group. Other mods can add your layer to their lens or toggle it from the lens panel.",
+      "when": "Any 'show me X on the map' feature.",
+      "whenNot": "Per-unit or per-city labels that move with the game (banners and plot icons fit better).",
+      "snippet": "import LensManager from \"/core/ui/lenses/lens-manager.js\";\nimport { HexToFloat4 } from \"/core/ui/utilities/utilities-color.js\";\n\nconst FILL = HexToFloat4(0x33cc66, 0.4);\n\nclass MyModLayer {\n  group = WorldUI.createOverlayGroup(\"MyModOverlay\", 3);\n  overlay = this.group.addPlotOverlay();\n  initLayer() {}\n  applyLayer() {\n    this.overlay.clear();\n    this.overlay.addPlots(findMyPlots(), { fillColor: FILL });\n  }\n  removeLayer() { this.overlay.clear(); }\n}\n\nclass MyModLens {\n  activeLayers = new Set([\"fxs-hexgrid-layer\", \"my-mod-layer\"]);\n  allowedLayers = new Set([\"fxs-yields-layer\"]);\n}\n\nLensManager.registerLensLayer(\"my-mod-layer\", new MyModLayer());\nLensManager.registerLens(\"my-mod-lens\", new MyModLens());",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Import the unbundled /core/ui/lenses/lens-manager.js. The old lens-manager.chunk.js import fails on 1.5.0 and takes your module with it.",
+        "Registering a layer or lens id twice logs an error and keeps the first; prefix ids with your mod id.",
+        "Batch plots into as few addPlots calls as you can. The map renderer has a per-frame resource cap that large overlay groups can reach.",
+        "Another mod can delete or replace a layer you rely on; look it up when you use it."
+      ],
+      "status": "works",
+      "statusNote": "The API is unchanged on 1.5.0; only the chunk-bundle import path died.",
+      "evidence": {
+        "mods": 32,
+        "note": "found in 32 of 1249 corpus mods (their code contains the idiom)"
+      },
+      "objects": [
+        "LensManager",
+        "WorldUI"
+      ],
+      "related": [
+        "import-current-paths",
+        "namespace-everything",
+        "canvas-batched-paints"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "map-generation-extension",
+      "title": "Map scripts by extension, not fork",
+      "category": "map-and-lenses",
+      "purpose": "Make a new map type or adjust generation without copying the vanilla generator.",
+      "why": "Vanilla map scripts are modules that subscribe to RequestMapInitData and GenerateMap and import shared generator modules. Subclassing the vanilla continents base class, or composing the shared generator modules, keeps your map current when vanilla changes; a fork does not.",
+      "when": "A new map type, or a variant of a vanilla one.",
+      "whenNot": "Code meant to run alongside whatever map the player picked: there is no working route for that on 1.5.0 (see the status note).",
+      "snippet": "// maps/my-mod-continents.js, the map script named by your Maps row\nimport { UnifiedContinentsBase } from \"/base-standard/scripts/voronoi_maps/unified-continents-base.js\";\n\nclass MyModContinents extends UnifiedContinentsBase {\n  placeSections(sections) {\n    // adjust the sections here, then let vanilla place them\n    return super.placeSections(sections);\n  }\n}\n\nfunction requestMapData(initParams) {\n  initParams.width = 84;\n  initParams.height = 54;\n  engine.call(\"SetMapInitData\", initParams);\n}\n\nfunction generateMap() {\n  // follow the vanilla continents-voronoi.js script, building MyModContinents\n  // where it builds its own map class\n}\n\nengine.on(\"RequestMapInitData\", requestMapData);\nengine.on(\"GenerateMap\", generateMap);",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Do not import a vanilla map script itself: it registers its own GenerateMap handler. Import the generator modules and classes it uses.",
+        "MapGenScripts items fail to load on 1.5.0 (an importer is required); import the extra script from your map script instead.",
+        "Voronoi generation crashed natively at 230x116 on 1.5.0; 180x94 generated.",
+        "Read setup values with Configuration.getMapValue (see setup-parameter-to-script).",
+        "Keep generation logic behind thin facades over GameplayMap and TerrainBuilder if you want to test it off the engine."
+      ],
+      "status": "changed",
+      "statusNote": "MapGenScripts no longer loads on 1.5.0, and several shared generator files moved; check imports against the install.",
+      "evidence": {
+        "mods": 50,
+        "note": "found in 50 of 1249 corpus mods (their code contains the idiom); the MapGenScripts failure and the size crash were watched on 1.5.0"
+      },
+      "objects": [
+        "engine",
+        "Configuration",
+        "TerrainBuilder",
+        "GameplayMap"
+      ],
+      "related": [
+        "setup-parameter-to-script",
+        "engine-free-cores",
+        "import-current-paths"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "setup-parameter-to-script",
+      "title": "Setup parameters your script reads",
+      "category": "map-and-lenses",
+      "purpose": "Offer a choice on the game setup screen and read it from your map or game script.",
+      "why": "A SetupParameters row in the config database shows up on the setup screen; its value is stored in the map or game configuration, which Configuration.getMapValue and getGame().getValue read at runtime.",
+      "when": "Map tunables, game-wide rule switches chosen before the game starts.",
+      "whenNot": "Settings a player changes mid-game (use your settings slice).",
+      "snippet": "<!-- config, shell scope -->\n<Database>\n  <Parameters>\n    <Row Key1=\"Map\" Key2=\"{my-mod}maps/my-mod-continents.js\" ParameterID=\"MyModWaterLevel\" Hash=\"0\"\n         Name=\"LOC_MY_MOD_WATER_LEVEL\" Description=\"LOC_MY_MOD_WATER_LEVEL_DESC\"\n         Domain=\"MyModWaterLevels\" DefaultValue=\"2\" ConfigurationGroup=\"Map\"\n         ConfigurationKey=\"MyModWaterLevel\" GroupId=\"MapOptions\" SortIndex=\"300\" />\n  </Parameters>\n</Database>\n<!-- map script:\nconst level = Configuration.getMapValue(\"MyModWaterLevel\") ?? 2; -->",
+      "snippetLang": "xml",
+      "pitfalls": [
+        "GameSetup.setGameParameterValue silently ignores a value of the wrong type (a string for an integer domain); read it back.",
+        "Writing GameConfiguration during a game has been reported to poison the save; set it at setup only.",
+        "The Domain needs its own rows (DomainValues or a DomainRange) or the setup screen has nothing to offer.",
+        "Key1=\"Map\" with Key2 naming your map script shows the parameter only for that map.",
+        "Copy the exact columns from the current config schema; this table's shape has changed between versions."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 222,
+        "note": "found in 222 of 1249 corpus mods (their code contains the idiom) read Configuration values"
+      },
+      "objects": [
+        "Configuration",
+        "GameSetup"
+      ],
+      "related": [
+        "map-generation-extension",
+        "match-current-schema"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "data-first-gameplay",
+      "title": "Gameplay changes as data first",
+      "category": "data-and-database",
+      "purpose": "Change rules with rows (types, modifiers, requirement sets) before reaching for script.",
+      "why": "Effects are implemented in C++ and attached through Modifiers, DynamicModifiers, ModifierArguments and RequirementSets. Data mods load in every mode, survive patches far better than script, and need no UI isolate. When there is no natural row to hang an effect on, an invisible carrier type (a hidden building, tradition or similar) holds it.",
+      "when": "Yields, costs, unlocks, adjacencies, conditional bonuses.",
+      "whenNot": "Behaviour the existing EFFECT_ types cannot express. Script cannot attach modifiers at runtime either.",
+      "snippet": "<Database>\n  <Types>\n    <Row Type=\"MODIFIER_MY_MOD_CITY_ADJUST_YIELD\" Kind=\"KIND_MODIFIER\" />\n  </Types>\n  <DynamicModifiers>\n    <Row ModifierType=\"MODIFIER_MY_MOD_CITY_ADJUST_YIELD\"\n         CollectionType=\"COLLECTION_OWNER\" EffectType=\"EFFECT_CITY_ADJUST_YIELD\" />\n  </DynamicModifiers>\n  <Modifiers>\n    <Row ModifierId=\"MY_MOD_GRANARY_FOOD\" ModifierType=\"MODIFIER_MY_MOD_CITY_ADJUST_YIELD\" />\n  </Modifiers>\n  <ModifierArguments>\n    <Row ModifierId=\"MY_MOD_GRANARY_FOOD\" Name=\"YieldType\" Value=\"YIELD_FOOD\" />\n    <Row ModifierId=\"MY_MOD_GRANARY_FOOD\" Name=\"Amount\" Value=\"2\" />\n  </ModifierArguments>\n  <!-- then attach MY_MOD_GRANARY_FOOD to its owner, for example a building or tradition -->\n</Database>",
+      "snippetLang": "xml",
+      "pitfalls": [
+        "Every EFFECT_ and COLLECTION_ name must exist in the current game. 1.5.0 removed at least one effect type and the reference check then refuses to start a game.",
+        "Gameplay rows apply to a new game; a loaded save does not pick up most changes.",
+        "DynamicModifiers.ModifierType references Types, so the Types row (Kind KIND_MODIFIER) must come first.",
+        "Prefer additive rows; edit existing rows with Update (see data-update-replace)."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 530,
+        "note": "530 of 1249 corpus mods write Modifiers rows; 538 ship no JavaScript at all"
+      },
+      "objects": [
+        "GameInfo"
+      ],
+      "related": [
+        "data-update-replace",
+        "match-current-schema",
+        "preview-by-reimplementing-modifiers"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "data-update-replace",
+      "title": "Edit existing rows with Update",
+      "category": "data-and-database",
+      "purpose": "Change a column of a row the base game (or another mod) already inserted.",
+      "why": "An Update with Where and Set changes the matching rows in place. Inserting a row whose key already exists fails with a UNIQUE constraint, and one failed statement rolls back the whole file.",
+      "when": "Tuning numbers or flags on existing types.",
+      "whenNot": "New types (insert rows), or a row you need to rebuild from scratch (see data-reinsert-safely).",
+      "snippet": "<Database>\n  <Units>\n    <Update>\n      <Where UnitType=\"UNIT_SCOUT\" />\n      <Set BaseMoves=\"3\" />\n    </Update>\n  </Units>\n  <Constructible_YieldChanges>\n    <Update>\n      <Where ConstructibleType=\"BUILDING_GRANARY\" YieldType=\"YIELD_FOOD\" />\n      <Set YieldChange=\"2\" />\n    </Update>\n  </Constructible_YieldChanges>\n</Database>",
+      "snippetLang": "xml",
+      "pitfalls": [
+        "An Update that matches no rows is not an error; check the result in the compiled database.",
+        "Replace means insert-or-replace on the primary key: it deletes the old row first, and ON DELETE CASCADE can remove rows that reference it.",
+        "Put the file in the action group of the age (or shell) whose database holds the rows; data under the wrong scope does nothing, silently."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 368,
+        "note": "368 of 1249 corpus mods use Update; 651 use Replace"
+      },
+      "objects": [],
+      "related": [
+        "data-reinsert-safely",
+        "match-current-schema",
+        "data-first-gameplay"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "data-reinsert-safely",
+      "title": "Re-add rows without a duplicate key",
+      "category": "data-and-database",
+      "purpose": "Insert a row that may already exist, because the base game added it in a patch or another mod did.",
+      "why": "A plain Row insert of an existing key fails the whole file and the game refuses to start a game in that age. Deleting the base row first, or using InsertOrIgnore or Replace, makes the file load whether or not the row is there.",
+      "when": "Rows the base game later absorbed (a feature that became vanilla), rows several mods add, composite-key rows such as Constructible_ValidDistricts.",
+      "whenNot": "Rows only your mod can own, with your prefix; a plain insert is clearer there.",
+      "snippet": "<Database>\n  <!-- Keep the row whether or not the base game already has it -->\n  <Constructible_ValidDistricts>\n    <InsertOrIgnore ConstructibleType=\"BUILDING_MY_MOD_WALL\" DistrictType=\"DISTRICT_WONDER\" />\n  </Constructible_ValidDistricts>\n\n  <!-- Rebuild a row: delete by the base row's key, then insert -->\n  <TypeTags>\n    <Delete Type=\"UNIT_MY_MOD_RANGER\" Tag=\"UNIT_CLASS_RECON\" />\n    <Row Type=\"UNIT_MY_MOD_RANGER\" Tag=\"UNIT_CLASS_RECON\" />\n  </TypeTags>\n</Database>",
+      "snippetLang": "xml",
+      "pitfalls": [
+        "A Delete must match the base row's current key values, not your new values.",
+        "Rows loaded in a different age from the base game's copy do not collide.",
+        "Several corpus mods were blocked on 1.5.0 by rows the base game had since added itself."
+      ],
+      "status": "works",
+      "statusNote": "1.5.0 added base rows that older mods also insert; their plain inserts now fail.",
+      "evidence": {
+        "mods": 334,
+        "note": "334 of 1249 corpus mods use InsertOrIgnore and 186 use Delete; duplicate-row failures were watched on 1.5.0"
+      },
+      "objects": [],
+      "related": [
+        "data-update-replace",
+        "match-current-schema"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "match-current-schema",
+      "title": "Match the current database schema",
+      "category": "data-and-database",
+      "purpose": "Make sure every insert names the columns and references the current game requires.",
+      "why": "Each game version can add NOT NULL columns, drop tables and remove effect types. An insert that misses a required column, or a reference to something removed, fails validation and the game returns to the main menu with a content configuration error.",
+      "when": "Before each release, and after every game update.",
+      "whenNot": "",
+      "snippet": "-- Run against the compiled database copy (Debug/gameplay-copy.sqlite after a game has loaded)\n-- or the frontend copy for main-menu tables.\nSELECT name, type FROM pragma_table_info('Traditions')\nWHERE \"notnull\" = 1 AND dflt_value IS NULL;\n\n-- Does an effect type you use still exist?\nSELECT Type FROM Types WHERE Type = 'EFFECT_CITY_ADJUST_YIELD';\n\n-- Is a table you write still there?\nSELECT name FROM sqlite_master WHERE type = 'table' AND name = 'DifficultyCustomPresets';",
+      "snippetLang": "sql",
+      "pitfalls": [
+        "On 1.5.0 new NOT NULL columns blocked older mods: Traditions.CultureSlotType, Beliefs.AISelectionBin, Mementos.Tag and Leaders.LeaderIntroText among them.",
+        "A shell-scope (main menu) failure stops every enabled mod's main-menu content, not just yours.",
+        "The Debug database copy holds no types until a game has loaded.",
+        "The bench's log view names the failing file and statement; read it before guessing."
+      ],
+      "status": "works",
+      "statusNote": "Schema changes in 1.5.0 blocked several older mods; all of these failures were watched.",
+      "evidence": {
+        "mods": null,
+        "note": "thirteen corpus mods watched failing to start on 1.5.0, each on one schema or reference error"
+      },
+      "objects": [
+        "Database"
+      ],
+      "related": [
+        "data-reinsert-safely",
+        "data-update-replace",
+        "runtime-db-queries"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "loc-tags-unique",
+      "title": "Unique LOC tags and the right text root",
+      "category": "data-and-database",
+      "purpose": "Ship text that loads, and keep one bad row from dropping your whole text file.",
+      "why": "LocalizedText has a unique key. A tag that duplicates one in the same file, in another mod, or in official content fails the insert, and the loader can drop the whole file or block the game. In-game text loads from a Database root with EnglishText (or the locale table) rows.",
+      "when": "Every text file.",
+      "whenNot": "",
+      "snippet": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<Database>\n  <EnglishText>\n    <Row Tag=\"LOC_MY_MOD_GRANARY_NAME\">\n      <Text>Granary Annex</Text>\n    </Row>\n    <Row Tag=\"LOC_MY_MOD_GRANARY_DESC\">\n      <Text>+2 Food in this settlement.</Text>\n    </Row>\n  </EnglishText>\n</Database>",
+      "snippetLang": "xml",
+      "pitfalls": [
+        "Prefix every tag with your mod id. Tags that copied an official civilization's tags blocked the main menu on 1.5.0.",
+        "The loader trims leading and trailing spaces from strings; use &#160; for a space that must survive, or add separators in code.",
+        "An element whose data-l10n-id does not resolve shows the raw tag on screen.",
+        "A text file the modinfo lists but the mod does not ship can fail the action group."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "duplicate-tag failures watched on 1.5.0; 193 corpus mods insert LocalizedText rows and 515 EnglishText rows"
+      },
+      "objects": [
+        "Locale"
+      ],
+      "related": [
+        "namespace-everything",
+        "match-current-schema"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "runtime-db-queries",
+      "title": "Read the compiled database from script",
+      "category": "data-and-database",
+      "purpose": "Query rows (including your own custom tables) from UI script.",
+      "why": "Database.query(domain, sql) runs a read against the compiled database of that domain: config at the main menu and in setup, gameplay in a game. GameInfo tables cover the common cases with lookup helpers.",
+      "when": "Data-driven UI: curated tables you ship, joins GameInfo cannot express.",
+      "whenNot": "Writes: Database.query is read-only and Database.execute does not exist.",
+      "snippet": "// Your own config-domain table, inserted by a shell-scope UpdateDatabase file\nconst weights = Database.query(\"config\", \"SELECT LeaderType, Weight FROM MyModLeaderWeights\") ?? [];\n\n// Gameplay domain, in a game\nconst coastal = Database.query(\n  \"gameplay\",\n  \"SELECT ConstructibleType FROM Constructibles WHERE ConstructibleType LIKE 'BUILDING_%' AND Cost < 120\"\n) ?? [];\n\n// GameInfo for simple lookups\nconst age = GameInfo.Ages.lookup(Game.age)?.AgeType; // Game.age is a hash, not a string",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Game.age is a numeric hash; compare through GameInfo.Ages.lookup, never by string.",
+        "Some tables (VisualRemaps, AssetSpecifications) are not in the compiled database dumps."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 405,
+        "note": "found in 405 of 1249 corpus mods (their code contains the idiom)"
+      },
+      "objects": [
+        "Database",
+        "GameInfo",
+        "Game"
+      ],
+      "related": [
+        "match-current-schema",
+        "preview-by-reimplementing-modifiers"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "preview-by-reimplementing-modifiers",
+      "title": "Preview effects by evaluating modifiers in JS",
+      "category": "data-and-database",
+      "purpose": "Show what a policy, building or placement would give before the player commits.",
+      "why": "Modifiers, their arguments and requirements are rows you can read. Evaluating the subset you support against current player and city state gives a yields delta without asking the gameplay engine to apply anything.",
+      "when": "What-if UI: policy comparison, build advisors, placement previews.",
+      "whenNot": "When the game already shows the number, or when an approximate preview would mislead.",
+      "snippet": "const HANDLERS = {\n  EFFECT_CITY_ADJUST_YIELD: (args, ctx) => ({ [args.YieldType]: Number(args.Amount) || 0 }),\n  // one entry per effect type you support\n};\n\nexport function previewModifier(modifierId, ctx) {\n  const mod = GameInfo.Modifiers.lookup(modifierId);\n  const dyn = mod && GameInfo.DynamicModifiers.lookup(mod.ModifierType);\n  const handler = dyn && HANDLERS[dyn.EffectType];\n  if (!handler) return null; // unknown effect: no preview, never a guess\n  const args = {};\n  for (const a of GameInfo.ModifierArguments) {\n    if (a.ModifierId === modifierId) args[a.Name] = a.Value;\n  }\n  return handler(args, ctx);\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "This is a partial re-implementation of the game's rules and drifts every time effect or requirement types change; return no preview for anything unknown.",
+        "Keep the evaluator engine-free so you can test it under Node (see engine-free-cores)."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "hand-read in two large corpus mods and a maintained fork"
+      },
+      "objects": [
+        "GameInfo"
+      ],
+      "related": [
+        "engine-free-cores",
+        "data-first-gameplay",
+        "runtime-db-queries"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "multiplayer-safe-requests",
+      "title": "Multiplayer-safe game requests",
+      "category": "gameplay-from-ui",
+      "purpose": "Change game state from a UI script without desyncing a multiplayer game.",
+      "why": "Every client runs the same UI scripts. A request that only touches the local player's own entities is sent once per owner; a request about shared state must come from one executor, or every client sends it.",
+      "when": "Any Game.*Operations.sendRequest or other write from UI code.",
+      "whenNot": "",
+      "snippet": "function isExecutor() {\n  const game = Configuration.getGame();\n  if (!game.isNetworkMultiplayer) return true; // single player and hotseat\n  return GameContext.localPlayerID === Network.getHostPlayerId();\n}\n\nexport function sendOwnCityRequest(cityID, operation, args) {\n  const city = Cities.get(cityID);\n  if (!city || city.owner !== GameContext.localPlayerID) return false; // own entities only\n  const check = Game.CityOperations.canStart(cityID, operation, args, false);\n  if (!check.Success) return false;\n  Game.CityOperations.sendRequest(cityID, operation, args);\n  return true;\n}\n\nexport function sendSharedRequest(send) {\n  if (isExecutor()) send(); // shared state: one client only\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Requests are fire-and-forget; confirm the effect by re-reading (see confirm-writes-by-reread).",
+        "No UI-side write has confirmed multiplayer sync. Gate writes you have not tested in multiplayer to single player.",
+        "Requests sent before the game has started (while the UI is loading) are dropped."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 136,
+        "note": "found in 136 of 1249 corpus mods (their code contains the idiom) send game-state requests from UI scripts"
+      },
+      "objects": [
+        "Game",
+        "GameContext",
+        "Configuration",
+        "Network",
+        "Cities"
+      ],
+      "related": [
+        "polling-shared-state-writes",
+        "confirm-writes-by-reread",
+        "validate-player-ids"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "confirm-writes-by-reread",
+      "title": "Confirm writes by re-reading",
+      "category": "gameplay-from-ui",
+      "purpose": "Know whether a request or engine write actually changed the game.",
+      "why": "sendRequest returns before anything happens and canStart checks the request's shape, not whether it will land. Some writes appear a tick later, some seconds later, some only at the turn roll. Only a re-read of the target shows the result.",
+      "when": "Any write your code then depends on.",
+      "whenNot": "",
+      "snippet": "export function confirm(read, expected, { timeoutMs = 3000, everyMs = 50 } = {}) {\n  return new Promise((resolve) => {\n    const start = Date.now();\n    const tick = () => {\n      if (read() === expected) return resolve({ landed: true, ms: Date.now() - start });\n      if (Date.now() - start >= timeoutMs) return resolve({ landed: false });\n      setTimeout(tick, everyMs);\n    };\n    tick();\n  });\n}\n\n// const res = await confirm(() => GameplayMap.getOwner(x, y), GameContext.localPlayerID);",
+      "snippetLang": "js",
+      "pitfalls": [
+        "A request sent under another player's id is refused; send as the local player and name the target civ in Owner where the operation takes it.",
+        "canStart returned success for requests that did nothing.",
+        "Do not read or write a plot again while earlier writes to it are still landing; a UI-thread crash was narrowed to that pattern."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "watched by the bench on game 1.5.0 (every bench write is verified this way)"
+      },
+      "objects": [
+        "Game",
+        "GameplayMap",
+        "GameContext"
+      ],
+      "related": [
+        "multiplayer-safe-requests",
+        "validate-player-ids"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "validate-player-ids",
+      "title": "Validate player ids before engine calls",
+      "category": "gameplay-from-ui",
+      "purpose": "Avoid native crashes from engine accessors that do not range-check their arguments.",
+      "why": "Some engine accessors index straight into native tables. An out-of-range player id can crash the game natively, return another player's data, or appear to work, depending on what memory follows the table. Players.get returns null for an id that is not a player.",
+      "when": "Every player-keyed call, especially with ids from events, saves or stored data.",
+      "whenNot": "",
+      "snippet": "export function withPlayer(pid, fn) {\n  if (!Number.isInteger(pid) || pid < 0) return null;\n  const player = Players.get(pid);\n  if (!player) return null;\n  return fn(player);\n}\n\n// const name = withPlayer(data.player, (p) => p.name);",
+      "snippetLang": "js",
+      "pitfalls": [
+        "A 'no crash' read is not proof of safety: the same bad id returned another player's name in one save and crashed in another.",
+        "Diplomacy.isAtWarWith is true for every Independent Power; it means hostile. Test isMajor === false."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "watched by the bench on game 1.5.0 (the bench resolves every id through Players.get); the crash was watched on 1.4.2 and 1.5.0"
+      },
+      "objects": [
+        "Players"
+      ],
+      "related": [
+        "confirm-writes-by-reread",
+        "crash-breadcrumbs"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "polling-shared-state-writes",
+      "title": "Per-client polling that writes shared state",
+      "category": "gameplay-from-ui",
+      "purpose": "Why a timer on every client must not send requests about shared state.",
+      "why": "In multiplayer every client runs your poll. Each one independently decides to declare war, create a unit or change an independent power, so the request is sent once per client and the game diverges or doubles the effect. Nothing in the engine warns you.",
+      "when": "React to a turn event instead of a timer, and send shared-state requests from one executor only (see multiplayer-safe-requests).",
+      "whenNot": "",
+      "snippet": "// Avoid\nsetInterval(() => { if (pirateTurn()) sendWarRequest(); }, 1000);\n\n// Do\nengine.on(\"PlayerTurnActivated\", (data) => {\n  if (data.player !== GameContext.localPlayerID) return;\n  if (!isExecutor()) return;\n  if (pirateTurn()) sendWarRequest();\n});",
+      "snippetLang": "js",
+      "pitfalls": [
+        "A poll that runs for the whole session also costs every frame budget it touches."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "read in one corpus mod with no host guard; not reproduced in a multiplayer game"
+      },
+      "objects": [
+        "engine",
+        "GameContext"
+      ],
+      "related": [
+        "multiplayer-safe-requests"
+      ],
+      "kind": "avoid"
+    },
+    {
+      "id": "icon-definitions",
+      "title": "Icons from your own PNG or a base texture",
+      "category": "art-and-assets",
+      "purpose": "Give a new type a real engine icon, usable anywhere a type icon or an [icon:] text token is.",
+      "why": "IconDefinitions rows map an id to a texture path. A path under your mod's fs://game namespace serves a PNG you ship; a blp: path aliases a texture the game already has, with nothing shipped.",
+      "when": "Every new type that the UI shows.",
+      "whenNot": "Art for your own panels only: a CSS background needs no row (see css-art-backgrounds).",
+      "snippet": "<Database>\n  <IconDefinitions>\n    <Row>\n      <ID>BUILDING_MY_MOD_GRANARY</ID>\n      <Path>fs://game/my-mod/icons/granary.png</Path>\n    </Row>\n    <Row>\n      <ID>UNIT_MY_MOD_RANGER</ID>\n      <Path>blp:unitflag_scout</Path>\n    </Row>\n  </IconDefinitions>\n</Database>",
+      "snippetLang": "xml",
+      "pitfalls": [
+        "List the PNG in an ImportFiles action too, or the fs:// path does not resolve; the game serves only files the modinfo declares.",
+        "Include the .png extension in the path.",
+        "Icon ids do not resolve at the main menu; texture paths do.",
+        "A .blp file is not necessarily a Civ VII package; a real one starts with the bytes CIVBLP."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 233,
+        "note": "233 corpus mods register a texture they ship and 80 alias a base-game texture; 383 write IconDefinitions"
+      },
+      "objects": [
+        "UI"
+      ],
+      "related": [
+        "css-art-backgrounds",
+        "visual-remaps"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "css-art-backgrounds",
+      "title": "Textures as CSS backgrounds",
+      "category": "art-and-assets",
+      "purpose": "Draw base-game textures or your own images inside your own UI, with no database row.",
+      "why": "GameFace resolves blp: and fs://game URLs in CSS, so any shipped UI texture or any image your modinfo declares can be a background. It is the one art route that also works at the main menu.",
+      "when": "Panels, illustrations, decorations in your own DOM.",
+      "whenNot": "Something the game itself must draw for a type (use icon-definitions).",
+      "snippet": ".my-mod-header {\n  background-image: url(\"blp:hud_sidepanel_list-bg\");\n  background-size: 100% 100%;\n  height: 0.5rem;\n}\n\n.my-mod-portrait {\n  background-image: url(\"fs://game/my-mod/art/portrait.png\");\n  background-size: cover;\n  width: 8rem;\n  height: 8rem;\n}",
+      "snippetLang": "css",
+      "pitfalls": [
+        "To show a type's icon at the main menu, resolve it in game with UI.getIconURL and store the returned blp: path.",
+        "Pick the texture size variant that matches your render size rather than scaling a mismatched one."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": 110,
+        "note": "110 corpus mods draw blp: textures in CSS; main-menu behaviour watched on 1.5.0"
+      },
+      "objects": [
+        "UI"
+      ],
+      "related": [
+        "icon-definitions",
+        "gameface-flexbox-layout"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "visual-remaps",
+      "title": "VisualRemaps for unit and building variants",
+      "category": "art-and-assets",
+      "purpose": "Make a new unit or building variant use an existing 3D model.",
+      "why": "A VisualRemaps row with Kind UNIT or BUILDING tells the art system to draw your type (From) with a shipped type's art (To), the way the base game does for its own variants.",
+      "when": "A new unit or building variant that may look like an existing one.",
+      "whenNot": "A constructible type you invented that needs a model on its tile: watched not to draw anything. Draw a shipped mesh yourself (see worldui-model-groups).",
+      "snippet": "<Database>\n  <VisualRemaps>\n    <Row ID=\"MY_MOD_REMAP_RANGER\" DisplayName=\"LOC_UNIT_MY_MOD_RANGER_NAME\"\n         Kind=\"UNIT\" From=\"UNIT_MY_MOD_RANGER\" To=\"UNIT_SCOUT\" />\n  </VisualRemaps>\n</Database>",
+      "snippetLang": "xml",
+      "pitfalls": [
+        "From is your type (the one drawn), To is the donor. The reverse is an inert row.",
+        "Kind CONSTRUCTIBLE is silently dropped. UNIT, BUILDING and IMPROVEMENT register; nothing logs a rejected row.",
+        "setRemapState and getRemapState report a dropped row as enabled. Check membership in VisualRemaps.getAvailableRemaps() instead.",
+        "A registered IMPROVEMENT remap still drew no model for a custom improvement.",
+        "The donor's art must be loaded in the current age."
+      ],
+      "status": "works",
+      "statusNote": "Works for variants; does not deliver a model for an invented constructible on 1.5.0.",
+      "evidence": {
+        "mods": 115,
+        "note": "115 corpus mods use VisualRemaps; the Kind and custom-constructible behaviour was watched on 1.5.0"
+      },
+      "objects": [
+        "VisualRemaps"
+      ],
+      "related": [
+        "worldui-model-groups",
+        "icon-definitions"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "worldui-model-groups",
+      "title": "Draw a shipped mesh on the map yourself",
+      "category": "art-and-assets",
+      "purpose": "Put a 3D model on a tile for a type you invented, without an art pipeline.",
+      "why": "WorldUI model groups place a cooked asset by name at a plot from UI script; the art system is not involved, so it works for types the remap system will not draw. The cooked asset names are a different namespace from blp: texture names.",
+      "when": "Visuals for custom improvements or markers, drawn only where your data says so.",
+      "whenNot": "Genuinely new 3D art: a mod folder cannot ship it. That needs a separately installed art package, which players must install by hand.",
+      "snippet": "const models = WorldUI.createModelGroup(\"MyModModels\");\n\nexport function drawMarker(plot) {\n  models.addModelAtPlot(\"IMP_Hillfort\", plot, { x: 0, y: 0, z: 0 }, {\n    placement: PlacementMode.TERRAIN,\n    followTerrain: true,\n    needsShadows: true,\n  });\n}\n\nexport function clearMarkers() {\n  models.clear();\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Redraw after a reload or age transition; the group lives in the UI page, not in the save.",
+        "Asset names must match a cooked asset exactly; a texture name finds nothing.",
+        "This is presentation only: the game state has no model, so other UIs and the AI do not see it."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "reported: read in a shipping corpus mod that uses it in place of a remap; the bench's author has not run a placement"
+      },
+      "objects": [
+        "WorldUI",
+        "PlacementMode"
+      ],
+      "related": [
+        "visual-remaps",
+        "retained-dom-markers"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "gameface-flexbox-layout",
+      "title": "Lay out with flexbox, never grid",
+      "category": "gameface-css",
+      "purpose": "Build layouts that GameFace actually draws.",
+      "why": "GameFace has no CSS grid. display: grid is stripped and computes to block, and 1fr stops the stylesheet parsing, so later rules are lost too. Only the log line 'near text: 1fr' reveals it.",
+      "when": "Every layout.",
+      "whenNot": "",
+      "snippet": ".my-mod-table {\n  display: flex;\n  flex-direction: column;\n}\n.my-mod-row {\n  display: flex;\n  flex-direction: row;\n  align-items: center;\n}\n.my-mod-cell { flex: 1 1 0; }\n.my-mod-cell--narrow { flex: 0 0 6rem; }\n.my-mod-wrap {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 0.4rem;\n}",
+      "snippetLang": "css",
+      "pitfalls": [
+        "A grid element lays out at zero size and nothing in the DOM says why.",
+        "A single-value gap does apply to rows on a wrapping flex container on 1.5.0.",
+        "No position: sticky, max-content, fit-content or align-items: baseline either (see gameface-css-subset)."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "watched by the bench on game 1.5.0 (grid stripped to block; log line is the only trace)"
+      },
+      "objects": [],
+      "related": [
+        "gameface-css-subset",
+        "gameface-border-longhands",
+        "gameface-text-rules"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "gameface-border-longhands",
+      "title": "Border colours as four longhands",
+      "category": "gameface-css",
+      "purpose": "Get the border colour you named instead of a grey hairline.",
+      "why": "border-color is a shorthand, and GameFace drops a var() inside a shorthand. The colour then reads initial (currentColor) and the border draws in the text colour. The per-side longhands accept var().",
+      "when": "Any border whose colour comes from a variable, or any shorthand with var() in it.",
+      "whenNot": "",
+      "snippet": ":root { --my-mod-edge: rgba(168, 132, 90, 1); }\n\n.my-mod-card {\n  border-width: 1px;\n  border-style: solid;\n  /* not: border-color: var(--my-mod-edge); */\n  border-top-color: var(--my-mod-edge);\n  border-right-color: var(--my-mod-edge);\n  border-bottom-color: var(--my-mod-edge);\n  border-left-color: var(--my-mod-edge);\n}",
+      "snippetLang": "css",
+      "pitfalls": [
+        "border-color, border-width and border-style do not look like shorthands, but they are.",
+        "A border under 1px can lose an edge under transform: scale; use 1px."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "watched by the bench on game 1.5.0 (the lint's border-color rule)"
+      },
+      "objects": [],
+      "related": [
+        "gameface-css-subset",
+        "gameface-flexbox-layout"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "gameface-text-rules",
+      "title": "Text that GameFace can draw",
+      "category": "gameface-css",
+      "purpose": "Avoid text that silently disappears or renders as boxes.",
+      "why": "Italic and oblique text lay out at zero height and draw nothing, while getComputedStyle still reports the style. The shipped fonts lack whole scripts. Tag names come back uppercase.",
+      "when": "Every piece of styled text.",
+      "whenNot": "",
+      "snippet": "/* Not font-style: italic; it draws nothing. Lean the row instead. */\n.my-mod-quote {\n  font-style: normal;\n  transform: skewX(-8deg);\n}\n\n/* Show a LOC tag only if it resolves; an unknown data-l10n-id shows the raw tag. */\n.my-mod-caption { white-space: normal; }",
+      "snippetLang": "css",
+      "pitfalls": [
+        "No Arabic, Hebrew, Devanagari and other Indic scripts, Thai or Ethiopic in the shipped fonts; the Latin body fonts lack Greek.",
+        "localName, tagName and nodeName are uppercase; compare lowercased, or use matches and closest.",
+        "Leading and trailing spaces are trimmed from localized strings.",
+        "rem follows the global UI scale but not the font-size setting."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "watched by the bench on game 1.5.0 (the lint's italic and unresolved-text rules)"
+      },
+      "objects": [],
+      "related": [
+        "gameface-css-subset",
+        "loc-tags-unique"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "gameface-css-subset",
+      "title": "The CSS subset GameFace supports",
+      "category": "gameface-css",
+      "purpose": "Know which CSS features silently do nothing, and the substitutes that work.",
+      "why": "GameFace drops unparseable declarations with at most a log line. clamp(), min() and max() compute to auto (a shorthand containing one dies whole), two-argument var() and var() in shorthands are dropped, zoom is not implemented, and the root font size is a constant that does not track resolution.",
+      "when": "Writing any stylesheet, and scaling a panel to the screen.",
+      "whenNot": "",
+      "snippet": "/* clamp(5.7rem, 12.5vh, 7.5rem) rewritten */\n.my-mod-band {\n  height: 12.5vh;\n  min-height: 5.7rem;\n  max-height: 7.5rem;\n}\n\n/* number * var(length) is safe; scale a whole panel with transform */\n:root { --my-mod-u: 1rem; }\n.my-mod-gap { margin-top: calc(2 * var(--my-mod-u)); }\n.my-mod-frame {\n  width: 50rem;              /* laid out at 1/s ... */\n  transform: scale(1.25);    /* ... then scaled by s; transform does not reflow */\n  transform-origin: top left;\n}",
+      "snippetLang": "css",
+      "pitfalls": [
+        "transform: scale changes the visual box but not layout; lay the panel out at 1/s first.",
+        "window.matchMedia does not exist, but @media blocks fire; test breakpoints by measuring an element they style.",
+        "A synchronous clear-and-refill of a container paints no empty frame; recreating a tab bar each render flashes its first tab."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "each limit watched on 1.5.0 by measuring computed styles and geometry in the live UI"
+      },
+      "objects": [],
+      "related": [
+        "gameface-flexbox-layout",
+        "gameface-border-longhands",
+        "gameface-text-rules"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "gameface-xhr-not-fetch",
+      "title": "Load files with XMLHttpRequest, not fetch",
+      "category": "gameface-css",
+      "purpose": "Read a data or text file your mod ships from UI script.",
+      "why": "The UI context has no fetch (it is a ReferenceError). XMLHttpRequest works against fs://game paths and returns the file's exact text, for files the modinfo declares.",
+      "when": "Loading JSON tables, templates or text you ship.",
+      "whenNot": "Writing: an XHR PUT returns 200 and changes nothing. There is no file write.",
+      "snippet": "export function readModFile(path) {\n  return new Promise((resolve, reject) => {\n    const xhr = new XMLHttpRequest();\n    xhr.open(\"GET\", `fs://game/my-mod/${path}`);\n    xhr.onload = () => (xhr.status === 200 || xhr.status === 0)\n      ? resolve(xhr.responseText)\n      : reject(new Error(`my-mod: ${path} -> ${xhr.status}`));\n    xhr.onerror = () => reject(new Error(`my-mod: cannot read ${path}`));\n    xhr.send();\n  });\n}\n\n// const table = JSON.parse(await readModFile(\"data/my-mod-table.json\"));",
+      "snippetLang": "js",
+      "pitfalls": [
+        "A file the modinfo does not declare is not served, even if it is in your folder; list it under ImportFiles.",
+        "To export data for the player, UI.setClipboardText works; downloads and clipboard reads do not."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "watched by the bench on game 1.5.0 (deploy --prove reads served files this way)"
+      },
+      "objects": [
+        "XMLHttpRequest",
+        "UI"
+      ],
+      "related": [
+        "packaging-accidents",
+        "import-current-paths"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "crash-breadcrumbs",
+      "title": "Crash breadcrumbs",
+      "category": "investigate-and-debug",
+      "purpose": "Find which call precedes a native crash, where nothing throws and the log otherwise stops.",
+      "why": "A native crash kills the process mid-path. A numbered trail through the suspect code, written with console.error (which reaches UI.log, unlike console.log), leaves the last step reached as the final line.",
+      "when": "The game crashes and the cause is not in UI.log. Read the log tail before forming a theory.",
+      "whenNot": "Hot paths in a shipped release; remove or gate the trail once the cause is found.",
+      "snippet": "let step = 0;\nexport const crumb = (label) => console.error(`my-mod crumb ${++step} ${label}`);\n\nexport function riskyPass(plots) {\n  crumb(\"pass start\");\n  for (const plot of plots) {\n    crumb(`read ${plot.x},${plot.y}`);\n    const owner = GameplayMap.getOwner(plot.x, plot.y);\n    crumb(`write ${plot.x},${plot.y} owner=${owner}`);\n    applyChange(plot);\n  }\n  crumb(\"pass end\");\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Do not de-duplicate or rate-limit the trail; the last line must be the last step.",
+        "console.log never reaches UI.log; use console.warn or console.error.",
+        "Native crashes are not fully deterministic. Confirm a suspect by isolation (that mod off versus on, with replicates), not by one run."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "hand-read in one corpus mod; console routing watched; the bench's bisect isolates a crash by mod"
+      },
+      "objects": [
+        "console",
+        "UI"
+      ],
+      "related": [
+        "engine-free-cores",
+        "validate-player-ids",
+        "canvas-batched-paints"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "engine-free-cores",
+      "title": "Engine-free calculation cores",
+      "category": "investigate-and-debug",
+      "purpose": "Test scoring and projection logic under Node instead of inside the game.",
+      "why": "Logic that takes plain values and injected functions, never engine globals, runs anywhere. Thin per-screen adapters read the engine and call the core, so the expensive bugs (arithmetic) are cheap to test.",
+      "when": "Advisors, scores, projections, map maths, previews.",
+      "whenNot": "Code whose only job is talking to the engine.",
+      "snippet": "// score.js: no engine globals\nexport function scorePlot(plot, { yieldsOf, distanceTo }) {\n  const y = yieldsOf(plot);\n  return (y.food * 2 + y.production * 1.5 + y.gold) / (1 + 0.1 * distanceTo(plot));\n}\n\n// adapter.js: the only file that touches the engine\nimport { scorePlot } from \"./score.js\";\nexport const scoreLive = (plot) => scorePlot(plot, {\n  yieldsOf: (p) => readYields(p.x, p.y),\n  distanceTo: (p) => GameplayMap.getPlotDistance(p.x, p.y, capital.x, capital.y),\n});\n\n// score.test.mjs (node --test): pass fakes\n// assert.equal(scorePlot(p, { yieldsOf: () => ({ food: 2, production: 1, gold: 0 }), distanceTo: () => 0 }), 5.5);",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Keep adapters thin and isolated, each in its own try/catch, so one broken screen does not take down the rest."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "hand-read in several corpus advisor and map mods"
+      },
+      "objects": [
+        "GameplayMap"
+      ],
+      "related": [
+        "preview-by-reimplementing-modifiers",
+        "crash-breadcrumbs"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "canvas-batched-paints",
+      "title": "Batch canvas paints",
+      "category": "performance-and-limits",
+      "purpose": "Draw on a <canvas> without exhausting a renderer pool that crashes the game.",
+      "why": "Each canvas fill() or stroke() takes about one slot of a 49,152-item static resource pool, and nothing frees it: not clearRect, not resizing, not recreating the element. When the pool is full the game crashes. Fewer paint calls is the only lever.",
+      "when": "Any canvas that repaints: charts, minimaps, timelines.",
+      "whenNot": "Content that changes often per item: move it to DOM (see retained-dom-markers).",
+      "snippet": "// One path and one fill per colour, never one per shape.\nexport function paintHexes(ctx, hexesByColor) {\n  for (const [color, hexes] of hexesByColor) {\n    ctx.beginPath();\n    for (const h of hexes) {\n      ctx.moveTo(h.x + h.w / 2, h.y);\n      ctx.lineTo(h.x + h.w, h.y + h.h / 4);\n      ctx.lineTo(h.x + h.w, h.y + (3 * h.h) / 4);\n      ctx.lineTo(h.x + h.w / 2, h.y + h.h);\n      ctx.lineTo(h.x, h.y + (3 * h.h) / 4);\n      ctx.lineTo(h.x, h.y + h.h / 4);\n      ctx.closePath();\n    }\n    ctx.fillStyle = color;\n    ctx.fill();\n  }\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Subpaths in one path must not overlap: GameFace fills even-odd, so an overlap punches a hole.",
+        "Paint static layers once; repaint only what changed.",
+        "There is no pixel API (getImageData, putImageData) and drawImage from an unpainted canvas composites black, so caching frames does not work."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "isolated with a harness by one corpus mod and documented in its code; the pool size is from the renderer's own crash log"
+      },
+      "objects": [
+        "CanvasRenderingContext2D"
+      ],
+      "related": [
+        "retained-dom-markers",
+        "crash-breadcrumbs"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "retained-dom-markers",
+      "title": "Retained DOM markers for changing content",
+      "category": "performance-and-limits",
+      "purpose": "Show per-item content that changes often (units, dots, highlights) without spending canvas pool slots.",
+      "why": "Mutating the position, colour or opacity of an existing element does not touch the canvas resource pool. Keeping one element per item and updating it costs nothing there, where repainting a canvas costs slots forever.",
+      "when": "Volatile per-item content over a static canvas or map.",
+      "whenNot": "Thousands of items that rarely change: a batched, paint-once canvas is lighter.",
+      "snippet": "const markers = new Map(); // id -> element\n\nexport function syncMarkers(layer, items) {\n  const seen = new Set();\n  for (const item of items) {\n    let el = markers.get(item.id);\n    if (!el) {\n      el = document.createElement(\"div\");\n      el.className = \"my-mod-marker\";\n      layer.appendChild(el);\n      markers.set(item.id, el);\n    }\n    el.style.transform = `translate(${item.x}px, ${item.y}px)`;\n    el.style.backgroundColor = item.color;\n    seen.add(item.id);\n  }\n  for (const [id, el] of markers) {\n    if (!seen.has(id)) { el.remove(); markers.delete(id); }\n  }\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Reuse elements; do not clear the layer and rebuild it every update."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "measured free against the canvas pool by the same corpus harness"
+      },
+      "objects": [
+        "document"
+      ],
+      "related": [
+        "canvas-batched-paints",
+        "worldui-model-groups"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "import-current-paths",
+      "title": "Import paths that exist in this game version",
+      "category": "packaging-and-loading",
+      "purpose": "Import vanilla modules by paths the installed game actually ships.",
+      "why": "A static import of a missing file, or of a name the module no longer exports, fails your whole module (SOURCE ERROR) and nothing in it runs. 1.5.0 ships no *.chunk.js bundles and moved some modules.",
+      "when": "Every import of a vanilla module, and again after every game update.",
+      "whenNot": "",
+      "snippet": "// 1.4 bundle imports, dead on 1.5.0:\n//   import { P as Panel } from \"/core/ui/panel-support.chunk.js\";\n//   import { L as LensManager } from \"/core/ui/lenses/lens-manager.chunk.js\";\n\n// Unbundled modules export real names:\nimport Panel from \"/core/ui/panel-support.js\";\nimport LensManager from \"/core/ui/lenses/lens-manager.js\";\nimport { FocusManager } from \"/core/ui-next/services/focus-manager.js\"; // moved from core/ui/input/\n\n// Must run on more than one version? Probe instead of importing statically.\nconst mod = await import(\"/core/ui/some-module.js\").catch(() => null);",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Bundles exported single letters (L as X); the unbundled module exports real names, so fix the import list as well as the path.",
+        "focus-manager.js moved from core/ui/input/ to core/ui-next/services/ in 1.5.0.",
+        "Check every import against the install before release; 'it loaded last patch' is not evidence.",
+        "Stale imports in files the modinfo never loads are harmless; check reachability before panicking."
+      ],
+      "status": "changed",
+      "statusNote": "1.5.0 removed every chunk bundle and moved several modules.",
+      "evidence": {
+        "mods": null,
+        "note": "21 of 1249 corpus mods import chunk bundles and 27 import some file 1.5.0 no longer ships; watched failing on 1.5.0"
+      },
+      "objects": [],
+      "related": [
+        "chunk-bundle-imports",
+        "version-resilient-binding",
+        "optional-dynamic-import"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "chunk-bundle-imports",
+      "title": "*.chunk.js bundle imports",
+      "category": "packaging-and-loading",
+      "purpose": "Why imports of vanilla chunk bundles break mods on 1.5.0, and the replacement.",
+      "why": "Through 1.4 the UI shipped bundled chunk files and mods imported their minified exports. 1.5.0 ships none, so the static import fails the importing module and a dynamic import rejects.",
+      "when": "Import the unbundled module (usually the same path without .chunk) by its real export names; if it does not exist, the module moved.",
+      "whenNot": "",
+      "snippet": "// Dead on 1.5.0\nimport { a as ViewManager } from \"/core/ui/views/view-manager.chunk.js\";\n\n// Replacement\nimport ViewManager from \"/core/ui/views/view-manager.js\";",
+      "snippetLang": "js",
+      "pitfalls": [
+        "Older guides still show chunk imports as current.",
+        "The log line names the chunk file; the bench's log view flags it."
+      ],
+      "status": "dead",
+      "statusNote": "1.5.0 ships no *.chunk.js files.",
+      "evidence": {
+        "mods": 21,
+        "note": "found in 21 of 1249 corpus mods (their code contains the idiom); their failures were watched on 1.5.0"
+      },
+      "objects": [],
+      "related": [
+        "import-current-paths"
+      ],
+      "kind": "avoid"
+    },
+    {
+      "id": "mod-copies-and-shadowing",
+      "title": "Know which copy of your mod is live",
+      "category": "packaging-and-loading",
+      "purpose": "Stop editing one copy of a mod while the game loads another.",
+      "why": "The game loads one folder per mod id. A Workshop subscription, a nested dist/ copy or a backup folder with the same id can be the one loaded, and edits to your working copy then do nothing. The mod registry (Mods.sqlite) records which copy is enabled and where it is.",
+      "when": "Whenever an edit appears to do nothing, and before every test session.",
+      "whenNot": "",
+      "snippet": "-- Mods.sqlite in the game's user folder: every registered copy of an id, and its state\nSELECT m.ModId, m.Disabled, f.Path\nFROM Mods m\nJOIN ScannedFiles f ON f.ScannedFileRowId = m.ScannedFileRowId\nWHERE m.ModId = 'my-mod';",
+      "snippetLang": "sql",
+      "pitfalls": [
+        "Unsubscribe from your own Workshop item while developing, or it shadows the local copy.",
+        "A build output folder inside the mod folder is a second copy with the same id.",
+        "Editing a modinfo re-registers the mod under a new row, and a Workshop update comes back enabled.",
+        "The first launch after a game update loads no mods at all; launch again before concluding anything."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "watched by the bench on game 1.5.0 (the Mods view flags duplicate and Workshop-shadowed copies)"
+      },
+      "objects": [
+        "Modding"
+      ],
+      "related": [
+        "reload-ui-after-deploy",
+        "packaging-accidents"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "reload-ui-after-deploy",
+      "title": "Reload the UI after copying files",
+      "category": "packaging-and-loading",
+      "purpose": "See an edited UIScript run without restarting the game.",
+      "why": "UIFileWatcher does not reload the page for a changed UIScript, a CDP page reload does nothing, and re-importing a module returns the cached instance. UI.reloadUI() rebuilds the UI page in place: BeforeUnload fires and every UIScript runs again about a second later, with the same game and turn.",
+      "when": "After deploying changed JS or CSS.",
+      "whenNot": "Data and text changes: they compile when a game starts and need a new game.",
+      "snippet": "// In the game's console (or over the debugger):\nUI.reloadUI();\n\n// In your mod: release what the old page held.\nengine.on(\"BeforeUnload\", () => {\n  clearMarkers();\n  saveSettings(currentSettings);\n});",
+      "snippetLang": "js",
+      "pitfalls": [
+        "A ?v=N query on an import does not re-execute a loaded module.",
+        "Make bootstrap code idempotent: it runs again on the new page.",
+        "Confirm the game serves your new bytes; a shadowing copy makes a reload show old code (see mod-copies-and-shadowing)."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "watched by the bench on game 1.5.0"
+      },
+      "objects": [
+        "UI",
+        "engine"
+      ],
+      "related": [
+        "mod-copies-and-shadowing",
+        "whenready-bootstrap"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "modinfo-action-verbs",
+      "title": "Modinfo action verbs that Civ VII handles",
+      "category": "packaging-and-loading",
+      "purpose": "Pick the action that gets each file into the game, in the right scope.",
+      "why": "Each action group runs in a scope (shell for the main menu and setup, game for a game) with criteria such as an age. UIScripts runs a module, ImportFiles only makes a file servable, UpdateDatabase, UpdateText, UpdateIcons, UpdateColors and UpdateVisualRemaps load data. Civ VI verbs have no handler and do nothing.",
+      "when": "Every modinfo.",
+      "whenNot": "",
+      "snippet": "<ActionGroups>\n  <ActionGroup id=\"my-mod-shell\" scope=\"shell\" criteria=\"always\">\n    <Actions>\n      <UpdateDatabase><Item>config/my-mod-input.xml</Item></UpdateDatabase>\n      <UpdateText><Item>text/en_us/my-mod-text.xml</Item></UpdateText>\n    </Actions>\n  </ActionGroup>\n  <ActionGroup id=\"my-mod-game\" scope=\"game\" criteria=\"always\">\n    <Actions>\n      <UIScripts><Item>ui/my-mod-main.js</Item></UIScripts>\n      <ImportFiles><Item>ui/my-mod-screen.css</Item><Item>icons/granary.png</Item></ImportFiles>\n      <UpdateDatabase><Item>data/my-mod-gameplay.xml</Item></UpdateDatabase>\n      <UpdateText><Item>text/en_us/my-mod-text.xml</Item></UpdateText>\n      <UpdateIcons><Item>icons/my-mod-icons.xml</Item></UpdateIcons>\n    </Actions>\n  </ActionGroup>\n</ActionGroups>",
+      "snippetLang": "xml",
+      "pitfalls": [
+        "ReplaceUIScript, AddGameplayScripts and AddUserInterfaces are Civ VI verbs. Civ VII logs 'No registered handler' and the group does nothing.",
+        "MapGenScripts items fail to load on 1.5.0.",
+        "A UI-only mod needs AffectsSavedGames 0; without it, a save made without the mod skips it and its UIScripts never run.",
+        "Data under the wrong scope does nothing, silently."
+      ],
+      "status": "works",
+      "statusNote": "MapGenScripts stopped loading on 1.5.0.",
+      "evidence": {
+        "mods": null,
+        "note": "the Civ VI verbs have no handler in the 1.5.0 loader; the AffectsSavedGames and MapGenScripts behaviour was watched"
+      },
+      "objects": [
+        "Modding"
+      ],
+      "related": [
+        "packaging-accidents",
+        "same-path-shadowing",
+        "import-current-paths"
+      ],
+      "kind": "technique"
+    },
+    {
+      "id": "packaging-accidents",
+      "title": "Packaging accidents",
+      "category": "packaging-and-loading",
+      "purpose": "Ship exactly the files your modinfo names, and nothing else by accident.",
+      "why": "The game serves only files the modinfo declares, so an undeclared file is dead bytes. A file the modinfo lists but the folder lacks can fail its whole action group; in a shell group that stops the main-menu configuration for every mod. Doubled folders and stray copies ship dead bytes or a second mod with the same id.",
+      "when": "Before every release: compare the modinfo's items with the folder, and lint every XML file.",
+      "whenNot": "",
+      "snippet": "// A pre-release check, run with node: every modinfo item exists, every shipped UI file is declared.\nimport { readFileSync, existsSync } from \"node:fs\";\nconst modinfo = readFileSync(\"my-mod.modinfo\", \"utf8\");\nconst items = [...modinfo.matchAll(/<Item>([^<]+)<\\/Item>/g)].map((m) => m[1].trim());\nconst missing = items.filter((p) => !existsSync(p));\nif (missing.length) {\n  console.error(\"listed but not shipped:\", missing);\n  process.exit(1);\n}",
+      "snippetLang": "js",
+      "pitfalls": [
+        "A modinfo listing locale text files that were never shipped blocked the main menu on 1.5.0.",
+        "A truncated or junk-trailed XML file is likely skipped whole; the loader tolerates only some malformations.",
+        "A .blp in a mod is not necessarily a Civ VII package."
+      ],
+      "status": "works",
+      "statusNote": "",
+      "evidence": {
+        "mods": null,
+        "note": "a missing listed text file was watched blocking the main menu on 1.5.0; other cases read in the corpus"
+      },
+      "objects": [],
+      "related": [
+        "modinfo-action-verbs",
+        "mod-copies-and-shadowing",
+        "loc-tags-unique"
+      ],
+      "kind": "avoid"
+    }
+  ]
+}
