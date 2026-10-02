@@ -40,6 +40,8 @@ All notable changes to Tower Bench are documented here. This project follows sem
 - `sim diff` / `sim repeat`: the same seeded game with a mod off and on, the first divergence, and a determinism
   control; `fuzz`: random verified actions with invariants, failures shrunk to a minimal recipe; `arena`: balance
   across seeds with bootstrap intervals. `lab` and `bisect` refuse while any long run is going.
+- `coverage`: which of a mod's functions and branches ran, from the debugger's Profiler or from counting copies
+  deployed to the live copy and restored afterwards.
 - Examples in the README and the lint placeholder no longer name particular mods.
 
 ## [0.1.0] - 2026-09-29

@@ -373,6 +373,33 @@ passively (turns ended, no choices) and is left out of the numbers.
 Not watched: all three are tested against fakes only, and whether one seed repeats turn for turn is what `sim repeat` is
 there to find out. Until a control passes, nothing these tools report should be read as the mod's doing.
 
+## Coverage: which of a mod's functions ran
+
+```
+node tower-bench.mjs coverage probe
+node tower-bench.mjs coverage cdp ~/code/my-mod --for 60
+node tower-bench.mjs coverage instrument ~/code/my-mod --yes
+node tower-bench.mjs coverage report my-mod --md
+node tower-bench.mjs coverage restore ~/code/my-mod --yes
+```
+
+`coverage` answers which of a mod's functions and if/else/case/catch blocks actually ran during a session, by either of
+two routes. The CDP route asks the debugger's Profiler for V8 precise coverage and maps it onto the mod's files,
+changing no file; `coverage probe` is the cheap test for whether the game's debugger supports it, printing each answer
+or error as given.
+
+The counting route works without the Profiler. `coverage instrument` writes copies of the mod's JavaScript that count
+each function and branch into the copy the game loads (never your source folder, never a Workshop copy), reloads the UI
+and proves the game serves them, as deploy does. Counters go on the line they count, so line numbers in UI.log still
+point at your source; a file whose counting copy would not parse is left plain and named. `coverage read` pulls the
+counts from the page, `coverage dump` writes them to UI.log for after a reload or a crash, `coverage report` shows per
+file what ran and every function that never did, and `coverage restore` puts the plain source back.
+
+Checked offline: the instrumenter's copies of 3,903 published-mod files all parse, its function and block finding
+matches TypeScript's parser on every one, and on 509 real modules run under Node its call counts match V8's own precise
+coverage for 4,200 of 4,201 functions. Not yet watched in the game: whether its debugger answers the Profiler domain,
+and either route end to end.
+
 ## Doctor: "my mod does not work"
 
 ```
