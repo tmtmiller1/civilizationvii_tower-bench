@@ -370,8 +370,11 @@ back is reported as flaky), then shrunk by delta debugging to a minimal recipe y
 and the mod's effect on each figure with an interval. There is no known all-AI observer game, so your player takes part
 passively (turns ended, no choices) and is left out of the numbers.
 
-Not watched: all three are tested against fakes only, and whether one seed repeats turn for turn is what `sim repeat` is
-there to find out. Until a control passes, nothing these tools report should be read as the mod's doing.
+Watched on 1.5.0, 2026-10-02: `sim repeat` played seed 4242 twice with the same 24 mods and the two games were identical
+at every turn start from 1 to 11 (all 3,404 plots, every unit and settlement, and each AI's gold, yields, population and
+techs). A seed does not repeat across a change to the mod list, though: adding a data mod can change map generation, so
+when the starting maps already differ `sim diff` says MAP DIFFERS and points to `arena`, which compares across seeds.
+`sim diff` on a mod, `fuzz` and `arena` themselves have not been watched yet.
 
 ## Coverage: which of a mod's functions ran
 

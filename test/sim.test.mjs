@@ -64,6 +64,11 @@ test("the series comparison finds the first divergent turn, says what, and draws
 test("a divergence is the mod's doing only under a passing control that reaches that turn", () => {
   const first = { turn: 5 };
   assert.equal(attribute(null, null).verdict, "NO DIVERGENCE");
+  const mapFirst = { turn: 1, counts: { plots: 212, units: 3, cities: 0, figures: 0 } };
+  assert.equal(attribute(mapFirst, { divergedAt: null, lastTurn: 10 }, { startTurn: 1 }).verdict, "MAP DIFFERS",
+    "a different starting map is not the mod's behaviour, even with a clean control");
+  assert.notEqual(attribute({ ...mapFirst, counts: { plots: 0, units: 1 } }, { divergedAt: null, lastTurn: 10 },
+    { startTurn: 1 }).verdict, "MAP DIFFERS");
   assert.equal(attribute(first, null).verdict, "UNCONTROLLED");
   assert.equal(attribute(first, { divergedAt: null, lastTurn: 10 }).verdict, "CAUSED BY THE MOD");
   assert.equal(attribute(first, { divergedAt: null, lastTurn: 4 }).verdict, "NOT ATTRIBUTABLE");
