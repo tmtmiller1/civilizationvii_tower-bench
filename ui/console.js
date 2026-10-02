@@ -1,4 +1,5 @@
 import { $, state, h, api, muted, messageOf } from "./core.js";
+import { techniqueLinks } from "./techniques.js";
 
 function leafClass(v) {
   if (typeof v === "string") return v.startsWith("[") ? "m" : "s";
@@ -42,8 +43,11 @@ async function run() {
   const t0 = performance.now();
   $("run-meta").textContent = "running...";
   try {
-    const out = lang === "sql" ? sqlTable(await api("/api/sql", { sql: code })) : tree((await api("/api/eval", { code })).value);
-    $("output").replaceChildren(out);
+    if (lang === "sql") $("output").replaceChildren(sqlTable(await api("/api/sql", { sql: code })));
+    else {
+      const r = await api("/api/eval", { code });
+      $("output").replaceChildren(...[tree(r.value), techniqueLinks(r.techniques, "Techniques that use this:")].filter((el) => el !== null));
+    }
     remember(lang, code);
   } catch (e) {
     $("output").replaceChildren(h("pre", { class: "error" }, messageOf(e)));

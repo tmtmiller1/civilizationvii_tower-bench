@@ -80,9 +80,20 @@ for (const b of document.querySelectorAll("[data-write]")) {
   });
 }
 
+// Undo refuses when the newest change has no inverse; the page asks before reverting the one before it.
+async function undoRequest() {
+  try {
+    return await api("/api/undo", {});
+  } catch (e) {
+    const msg = messageOf(e);
+    if (!/cannot be undone/.test(msg) || !confirm(`${msg}.\n\nRevert the one before it?`)) throw e;
+    return api("/api/undo", { skip: true });
+  }
+}
+
 $("undo").addEventListener("click", async () => {
   try {
-    const r = await api("/api/undo", {});
+    const r = await undoRequest();
     refreshStatus();
     // An undone mod switch changed the registry, not the map: there is no plot to re-read.
     if (r.changes) {

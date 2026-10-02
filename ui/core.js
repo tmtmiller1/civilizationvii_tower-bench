@@ -17,7 +17,10 @@ function setAttr(el, k, v) {
 export function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs ?? {})) setAttr(el, k, v);
-  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid instanceof Node ? kid : String(kid));
+  // Fully flattened: a list of [separator, link] pairs is a common child.
+  for (const kid of kids.flat(Infinity)) {
+    if (kid != null && kid !== false) el.append(kid instanceof Node ? kid : String(kid));
+  }
   return el;
 }
 
@@ -54,4 +57,21 @@ export const headRow = (cols) => h("thead", {}, h("tr", {}, cols.map((c) => h("t
 
 export function isOpen(tab) {
   return !$(`tab-${tab}`).hidden;
+}
+
+/** @type {Map<string, (() => unknown) | undefined>} loaders of tabs that feature modules add themselves */
+export const TAB_REGISTRY = new Map();
+
+/**
+ * Adds a tab from a feature module, so a new view needs no edit to index.html: a nav button before
+ * Evidence, and a section built once by `build`. `load` runs each time the tab is opened.
+ * @param {{ id: string, label: string, build: () => HTMLElement | HTMLElement[], load?: () => unknown }} tab
+ */
+export function registerTab({ id, label, build, load }) {
+  const nav = /** @type {HTMLElement} */ (document.querySelector("nav"));
+  const button = h("button", { role: "tab", "data-tab": id }, label);
+  nav.insertBefore(button, nav.querySelector('button[data-tab="evidence"]'));
+  const section = h("section", { id: `tab-${id}`, hidden: true }, build());
+  /** @type {HTMLElement} */ (document.querySelector("main")).append(section);
+  TAB_REGISTRY.set(id, load);
 }

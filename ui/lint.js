@@ -1,4 +1,5 @@
 import { $, h, api, toast, muted, messageOf } from "./core.js";
+import { techniqueLinks } from "./techniques.js";
 
 function groupByRule(issues) {
   const byRule = new Map();
@@ -9,6 +10,7 @@ function groupByRule(issues) {
 const ruleBlock = ([rule, list]) => h("div", { class: "mod" },
   h("div", {}, h("strong", {}, rule), muted(`  ${list.length}`)),
   h("div", { class: "note" }, list[0].detail),
+  techniqueLinks(list[0].techniques),
   list.slice(0, 25).map((i) => h("div", { class: "copy" }, i.path)));
 
 $("lint-run").addEventListener("click", async () => {

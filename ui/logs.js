@@ -1,4 +1,5 @@
 import { $, state, h, api, muted } from "./core.js";
+import { techniqueLinks } from "./techniques.js";
 
 const RANK = { noise: 0, info: 1, warn: 2, error: 3 };
 
@@ -12,7 +13,8 @@ function logVisible(l) {
 function logLine(l) {
   return h("div", { class: `logline sev-${l.severity}` },
     h("span", { class: "file" }, `${l.file}  `), l.text.trim(),
-    l.hint ? h("span", { class: "hint" }, l.hint) : null);
+    l.hint ? h("span", { class: "hint" }, l.hint) : null,
+    techniqueLinks(l.techniques));
 }
 
 export function addLogs(lines) {

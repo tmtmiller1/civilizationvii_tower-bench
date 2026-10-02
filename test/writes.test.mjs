@@ -81,3 +81,21 @@ test("a land unit sent to water gets the watched explanation, not the turn-roll 
   const naval = hintsFor(req, { verdict: "NO EFFECT", unitDomain: "DOMAIN_SEA", before: { water: false } });
   assert.doesNotMatch(naval.join(" "), /water plot/, "only the watched case is claimed");
 });
+
+test("undo refuses when the newest change cannot be undone, and skip reverts the one before it", async () => {
+  const { Bench } = await import("../lib/bench.mjs");
+  const fsm = await import("node:fs");
+  const osm = await import("node:os");
+  const pathm = await import("node:path");
+  const root = fsm.mkdtempSync(pathm.join(osm.tmpdir(), "tb-undo-"));
+  const bench = new Bench({ evidence: pathm.join(root, "evidence"), cdpPort: 1, user: root, logs: root, modsDb: "", userMods: root, install: null });
+  bench.log({ kind: "write", request: { op: "player.yield", args: { yield: "gold", amount: 10, owner: 0 } },
+    result: { verdict: "LANDED", inverse: { op: "player.yield", args: { yield: "gold", amount: -10, owner: 0 } } } });
+  bench.log({ kind: "write", request: { op: "progress.complete", args: { tree: "tech", owner: 0 } }, result: { verdict: "LANDED" } });
+  await assert.rejects(bench.undo(), /cannot be undone; undo with skip reverts the one before it/);
+  let sent = null;
+  bench.write = async (req) => { sent = req; return { verdict: "LANDED" }; };
+  await bench.undo({ skip: true });
+  assert.equal(sent.args.amount, -10);
+  bench.close();
+});

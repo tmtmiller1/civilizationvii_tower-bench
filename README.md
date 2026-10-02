@@ -175,7 +175,7 @@ to the evidence log with the turn.
 ## UI lint
 
 ```
-node tower-bench.mjs lint --scope .demographics-screen
+node tower-bench.mjs lint --scope .my-mod-screen
 ```
 
 Walks the running UI and flags GameFace failures, judged the way GameFace actually reports them (each watched on
@@ -197,11 +197,11 @@ hits in 511 elements, both the base game's own; point `--scope` at a mod's root 
 `mods` reads `Mods.sqlite` and groups copies by mod id: two enabled copies is an error, a Workshop copy live over a
 local one is a warning, a copy inside another mod's `dist/` is a shadow, and an enabled test probe is flagged because it
 loads into every game, your campaign included. Names and authors are resolved through each mod's own `LocalizedText`,
-and `--filter` (or the box in the Mods tab) matches id, name or author, so `--filter tower` lists one author's mods.
+and `--filter` (or the box in the Mods tab) matches id, name or author, so `--filter <author>` lists one author's mods.
 
 ```
-node tower-bench.mjs mods --filter canals
-node tower-bench.mjs mods live tower-canals "Mods/tower-canals" --yes    # load this copy, switch the others off
+node tower-bench.mjs mods --filter my-mod
+node tower-bench.mjs mods live my-mod "Mods/my-mod" --yes              # load this copy, switch the others off
 node tower-bench.mjs mods off example-probe --yes
 node tower-bench.mjs undo --yes
 ```
@@ -225,9 +225,238 @@ real failures:
 | `No registered handler for 'x (ReplaceUIScript)'` | warn | A Civ VI action verb; the Civ VII loader has none, so the group does nothing |
 | `No registered handler for 'x (UpdateText)'` | noise | A valid verb not handled in this scope; official content logs it too |
 | `There were issues loading '<file>'` | warn | One bad row, such as a duplicate LOC tag, can drop a whole text file |
+| `There were errors loading '<file>' that require a rollback` | error | Names the data or text file that failed |
+| `Errors when applying action '<group> (<verb>)'. Rollback Required` | error | Names the action group that failed |
+| `Failed to apply enabled components` | error | The game will not start a game that needs this content; it returns to the main menu with a validation error |
+| `There was an error applying config actions` | error | A main-menu file failed: no enabled mod's main-menu content loads |
+| `Rolling back database`, `complete rollback to vanilla`, `Failed Validation` | noise | Consequences of the failure above, so one failure reads as one incident |
+| `Invalid Reference on <Table>.<Column> - "X" does not exist` | error | A row points at a type this game version removed or renamed |
+| `Failed loading resource: …chunk.js` | error | An import of a bundle file the game no longer ships; the hint gives the unbundled path rule |
+| `SOURCE ERROR - /<mod>/<file>` | error | A module failed to load, so nothing in it runs; attributed to its mod |
 | SQLite constraint failures | error | A database action was rejected |
 | `Failed loading resource:` | warn | A missing asset; the base game logs some of these itself |
 | Uncaught / TypeError / ReferenceError | error | A script threw |
+
+## Conflicts and pre-flight
+
+```
+node tower-bench.mjs mods conflicts                      # among the mods the game will load
+node tower-bench.mjs mods conflicts --all --level low    # every installed copy, every severity
+node tower-bench.mjs check ~/code/my-mod                 # will this mod start a game on this version?
+```
+
+Both read files against the installed game and never run anything, so every finding says so. `mods conflicts` reads
+the copies `Mods.sqlite` says the game loads and reports where they collide: the same mod id, two different
+replacements of one vanilla file, two definitions or ui-next registrations of one component, a definition replacing a
+component another mod decorates, two patches of one method, a shared `localStorage` key or global, the same text tag,
+and database rows two mods both insert, update or delete. Cooperative merges (`X = Object.assign(X || {}, ...)`) and
+chained decorators are not counted as collisions. Each High finding comes with the command that proves it in game
+(`registry` for a component, otherwise a `bisect` over the pair) and every finding links to the technique that avoids
+it.
+
+`check` is the pre-flight for one mod folder. It reports, with a verdict of `BLOCKS GAME`, `FEATURE DEAD` or `MINOR`:
+rows missing a column this version requires, tables or columns that do not exist, duplicates of base-game rows,
+modifier effects this version removed, files the modinfo lists but the mod does not ship, imports the game does not
+ship, decorations of components that do not exist, text tags that duplicate the base game's, and files loaded at run
+time that no modinfo action declares. The cases a naive reading gets wrong are modelled, each watched in a game: a
+delete or replace of the base row first (including through `ON DELETE CASCADE`), rows loaded in different ages, groups
+gated on another mod, a mismatched XML close tag (the loader repairs it), and a listed `.dds` that is missing. It also
+lists the mod's conflicts with the mods the game will load alongside it.
+
+The database checks read the schema from the game's `Debug/gameplay-copy.sqlite`, which the game fills only once a game
+has loaded; until then they are skipped and the output says so. `--schema DIR` points at a saved copy of that folder
+instead. The Mods tab has a Check conflicts button and the Deploy tab a Pre-flight button.
+
+## Doctor: "my mod does not work"
+
+```
+node tower-bench.mjs doctor ~/code/my-mod
+node tower-bench.mjs doctor ~/code/my-mod --all --offline
+```
+
+`doctor` checks the usual causes in the order they are cheapest to rule out, and stops at the first one with the next
+action to take. Did the game update since the newest game index (the first launch after an update loads no mods)? Which
+copy of the mod id does the game load: a second enabled copy, a Workshop subscription or a nested build folder can
+shadow the one you edit. Does the pre-flight find a defect that stops a game or kills a feature? Is the edit live: the
+copy on disk against your source and, with the game connected, the bytes the game serves. What do the recent logs say
+about the mod, errors first, a database rollback read as one incident. With the game connected: did this game apply the
+mod, and did its components win. Finally, its conflicts with the mods loaded alongside it.
+
+Each step says OK, PROBLEM or SKIPPED and why. `--all` runs every step, `--offline` never asks the game, `--json` gives
+everything; the Doctor tab does the same. The steps that need the game are built against fakes and have not been watched
+in a live game yet.
+
+## Crash triage
+
+```
+node tower-bench.mjs crash
+node tower-bench.mjs crash list
+```
+
+`crash` reads the newest crash report (or one you name) before any theory: the time, the exception, the faulting thread
+and its top frames as offsets into each image, and a signature from the game binary's own frames, so a repeat of the
+same crash on the same build is counted. It gathers what the dying run left: the end of `UI.log`, the bench's
+breadcrumbs, the mods the run applied, the last rows of the AI logs, renderer errors, and the enabled mod set. The game
+truncates its logs at the next launch, so when the logs started after the crash, `crash` says they belong to a later run
+and leaves them out. A native crash is isolated by switching mods on and off, so the last line is the exact `bisect`
+command. Reports are read from macOS's DiagnosticReports and from the copies lab runs keep; other platforms are not
+supported yet.
+
+## Game updates
+
+```
+node tower-bench.mjs game snapshot
+node tower-bench.mjs game diff
+node tower-bench.mjs game impact
+```
+
+When the game updates, the bench can tell you which mods the update breaks before you find out one crash at a time.
+`game snapshot` indexes the installed game: every module file with its hash, what each script exports, the component
+names it defines, and the compiled database schema from the Debug copy (load a game once first; a copy older than the
+install is refused, and tables that installed mods create are left out). The index is self-contained, because an update
+deletes the old files: snapshot before an update and again after it.
+
+`game diff` lists what changed: files moved, renamed or removed, exports that went away, components, tables and columns,
+columns that became required, and modifier effect types that were removed. `game impact` reads your enabled mods (or
+`--mods all`, or any folders) and reports what each relied on that changed, with the old and new fact and a suggested
+fix, such as the moved file's new path. These findings are read from files; prove one in a game before acting on it.
+`doctor` and the Game updates tab say when the installed version is newer than your newest index.
+
+## Database diff and conflict proofs
+
+```
+node tower-bench.mjs dbdiff my-mod --yes
+node tower-bench.mjs dbdiff --files a.sqlite b.sqlite
+node tower-bench.mjs mods conflicts --prove --yes
+```
+
+`dbdiff <mod-id>` answers what a mod actually changed in the game's compiled database. It starts two seeded test games
+through the lab, the mod off and then on, copies each game's Debug databases (gameplay, localization, frontend) and
+compares them table by table: rows added, removed and changed, matched by primary key (or as whole rows where a table
+has none, or where a key with NULL parts repeats), with the changed columns and their old and new values for the first
+rows. Your saves, settings and registry are restored after each game. `--files` runs the same comparison on any two
+SQLite files, read-only; a 28 MB gameplay database takes about half a second.
+
+`mods conflicts --prove` runs a test game for each pair of mods behind a High finding (Medium too with `--level medium`)
+with only that pair enabled. Component collisions are judged from the running game's registry, database and text
+collisions from the load logs (a rollback confirms one; a clean load refutes a duplicate key but leaves an update or
+text collision to `dbdiff`), duplicate ids from the registry and the last launch's log. Findings that need a symptom to
+show get the bisect command instead. Each verdict is evidence and is stored, so later `mods conflicts` runs show
+"confirmed on <date>" next to the finding. The game-driven parts are tested against a simulated lab and have not been
+watched yet.
+
+## Game-state actions
+
+```
+node tower-bench.mjs do list
+node tower-bench.mjs do gold 500 --yes
+node tower-bench.mjs do heal --unit selected --yes
+```
+
+`do <action>` and the Actions tab change the running game for testing: Gold, Influence, the celebration meter, Science
+and Culture, wildcard attribute points; heal, damage, experience, promotion, movement, move and kill a unit; production
+progress, completion and population for a city; completing research or a chosen tech or civic; revealing the map and
+giving a plot to a city. Each is a write like any other: refused while writes are disarmed, sent as the local player
+naming the target, re-read until the change is seen, logged with a verdict and the standalone call a mod would use. Food
+and Production grants, and negative Science or Culture, are not offered, because the engine was watched doing nothing
+with them.
+
+Undo reverses only what the engine has been seen to reverse (Gold, Influence and the celebration meter by the opposite
+grant, unit damage, a killed unit by placing a new one, production progress, a plot taken from another city). When the
+newest change cannot be undone, Undo refuses rather than reverting an older one; `undo --skip` (or confirming in the
+page) reverts the one before it. The engine behaviour behind the grants, production, population, plot purchase and
+reveal, and unit removal was watched on 1.5.0; none of the actions has been watched through the bench yet.
+
+## Cost
+
+```
+node tower-bench.mjs cost my-mod --yes --turns 20
+```
+
+`cost <mod-id>` measures what a mod costs per turn: seeded test games with the mod off and on, alternating the order,
+every other enabled mod left as it is, turns ended without Autoplay. Per turn it records the wall time from turn end to
+the next local turn start, the page's JS heap, the game's resident memory, CDP metrics where the debugger answers, and
+new error lines. The report gives the median and 90th percentile per arm, the difference, a noise estimate and a
+verdict. The statistics are tested; the measurement has not been watched against the running game.
+
+## Before a release: release-check and l10n
+
+```
+node tower-bench.mjs release-check ~/code/my-mod/dist --zip my-mod.zip --against my-mod-1.2.0.zip
+node tower-bench.mjs l10n ~/code/my-mod
+node tower-bench.mjs l10n live
+```
+
+`release-check` reads the package you are about to ship and reports each check as PASS, FAIL, WARN or INFO with its fix:
+the version is higher than the last release (the `--against` package, else the Workshop copy registered in Mods.sqlite),
+the changelog has an entry for it, the zip matches the folder, every file the modinfo lists ships and nothing loaded at
+run time is undeclared, no development leftovers or nested copy of the mod, nothing outside the mod folder, no probes or
+debug switches left on, the pre-flight finds nothing that blocks a game, the name and description resolve,
+AffectsSavedGames is set deliberately, and a Steam .vdf beside the package uploads this mod at this version. It exits 1
+on any FAIL, so a release script can stop on it. Zips are read with unzip (macOS, Linux) or tar.exe (Windows 10 and
+later).
+
+`l10n` lints localization: LOC tags used but not defined in English (in the mod or the base game), each shipped language
+against English, duplicate tags, language codes the game does not have and locale attributes that disagree with their
+rows, placeholders a translation uses differently, and font lists that cannot draw Chinese, Japanese or Korean text when
+the mod ships it. `l10n live`, and two rules in `lint`, walk the running UI for visible text that draws as boxes; that
+walk has not been watched in a game.
+
+## What won: the registry view
+
+```
+node tower-bench.mjs registry
+```
+
+Mods collide in ways a file listing cannot settle: two mods define the same component, one registers a ui-next screen
+over another, a mod switched off for the next launch is still in the game you are playing. `registry` reads the
+outcome from the running game, on the main menu or in a game:
+
+- legacy components (`Controls.define`) a mod replaced or styled, with their priority and class;
+- ui-next components (`ComponentRegistry`) registered above the base priority of 0, with the factory that won. The
+  registry keeps only the winner, so the losers come from the static conflict check;
+- the mods this game applied (`Modding.getActiveMods()`) against the ones `Mods.sqlite` enables for the next launch,
+  with the ordinary reasons the two differ.
+
+Each source is probed before it is read; one this game version does not expose is reported as unavailable. The
+Registry tab shows the same.
+
+## Canvas resource pool
+
+```
+node tower-bench.mjs canvas probe --k 1000
+node tower-bench.mjs canvas count install
+node tower-bench.mjs agent canvas on
+node tower-bench.mjs canvas stress --yes --reload-at 30000      # lab games only
+```
+
+Painting on a `<canvas>` is reported to take a slot in a 49,152-item renderer pool per `fill()` or `stroke()`, never
+released, with a hard crash when it fills (`PartitionedResourceList.AddStaticResource()` in `Renderer.log`). `canvas
+probe` looks for a readable counter: it samples every resource-like number the game's script objects and debugger
+domains expose, waits without painting as a control, paints `k` calls, and samples again. A counter moves by about
+one per call and not during the control. Without one, `canvas count` wraps the 2D context's paint methods and counts
+calls on the current page, an upper bound on slots; `agent canvas on` does the same from page load and writes a
+`[TB-CANVAS]` line to `UI.log` every 1,000 calls. A watch on `globalThis.__tbCanvas?.calls` turns it into a series per
+turn. `canvas stress` paints until the game dies and reports the count it died at from the last breadcrumb in
+`UI.log`; with `--reload-at` it reloads the page once on the way, which shows whether the pool lives as long as the
+page or the process. It refuses to run outside a lab game.
+
+## Techniques
+
+```
+node tower-bench.mjs techniques persist
+node tower-bench.mjs techniques show decorate-dont-replace
+```
+
+A library of techniques used successfully in Civilization VII mods, each with what it is for, why it works, when to
+use it and when not, a short snippet, pitfalls, and whether it still works on the current game. Patterns to avoid are
+listed with the reason. The Techniques tab browses and searches it. Findings elsewhere link to it: a log line, a lint
+hit, a mod-copy warning, a refused deploy, a conflict or a pre-flight defect carries "How to do this instead" links to
+the entries that fix it, and the console offers the entries that use the engine objects your code names.
+
+A recipe can list the techniques it exercises (`"techniques": ["lens-registration"]`). When it passes in a lab game,
+those entries are marked watched by the bench with the date and game version; a later failure shows as the latest
+run.
 
 ## Test games, recipes and bisection
 
@@ -371,6 +600,22 @@ and the player's autosaves, LocalStorage, Hall of Fame and options files matched
 `LANDED`; at the game's next launch (started by another test harness on the same machine) `Modding.log` applied every
 enabled mod except that one; the Undo button then put the flag back, and all 113 registry rows matched a snapshot taken
 before the switch.
+
+**Not watched yet (0.2.0 work, built and tested offline only):** the registry view, the canvas probe, counter and
+stress test, and the agent's canvas counting have run only against fake engines in the tests; none has run in a game.
+`mods conflicts` and `check` ran on a real install (22 enabled mods, 2.6 s) and, over a corpus of 1,249 published
+mods, flagged every statically detectable defect that had been watched blocking a game or killing a feature (17) and
+none of the 4 watched false flags. Their predictions are not watched; each finding says so. The web UI's Techniques,
+Registry, conflicts and pre-flight views were driven in headless Chrome with no console errors.
+
+**Built and checked offline for the next release, not watched in game:** `dbdiff --files` on real database copies
+(a file against itself shows no change; two copies from different mod sets in about half a second); `game snapshot`
+of 1.5.0 (11,119 files, 488 KB) and `game impact` over the enabled mods, plus a reconstructed 1.4.2 index over 1,247
+published mods whose flags matched the defects found by the earlier analysis (partly circular: the reconstruction
+came from that analysis); `crash` over 14 real crash reports (4 signatures); `doctor`,
+`release-check` and `l10n` on real mod folders and packages. Every tab was driven in headless Chrome with no console
+errors and the bench pointed away from any game. The game-state actions, `cost`, the lab halves of `dbdiff` and
+`mods conflicts --prove`, the connected `doctor` steps and `l10n live` ran only against fakes.
 
 **NOT verified yet:** the `lab run` command as a whole (its parts ran inside bisect), the Windows default paths, and the
 hint for a land unit sent to water as shown in a live write (its inputs, `GameplayMap.isWater` and the unit's `Domain`,

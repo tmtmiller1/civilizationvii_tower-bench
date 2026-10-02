@@ -76,6 +76,7 @@
   .v-NOEFFECT { background: #3f321a; color: #f0c56a; }
   .v-REFUSED { background: #2c3038; color: #b8c0cc; }
   .v-THREW { background: #472222; color: #ffaaaa; }
+  .v-UNEXPECTED { background: #3f2a1a; color: #f0a36a; }
   .v-ALREADY { background: #1e3147; color: #9cc4ef; }
   pre.snippet { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; white-space: pre-wrap; margin: 6px 0 0; }
 
@@ -108,6 +109,20 @@
   .logline { padding: 3px 0; border-bottom: 1px solid #1c2027; white-space: pre-wrap; word-break: break-word; }
   .logline .file { color: var(--muted); }
   .logline .hint { display: block; color: var(--ink-2); padding-left: 16px; font-family: var(--sans); }
+  .tq-wrap { align-items: flex-start; }
+  .tq-list { flex: 0 0 300px; max-height: 70vh; overflow: auto; }
+  .tq-detail { flex: 1 1 400px; min-width: 0; }
+  .tq-cat { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0 4px; }
+  .tq-group:first-child .tq-cat { margin-top: 0; }
+  .tq-item { padding: 3px 6px; border-radius: 3px; cursor: pointer; }
+  .tq-item:hover, .tq-item.sel { background: var(--panel-2); }
+  .tq-title { font-size: 16px; margin: 0 0 8px; }
+  .tq-badge { font: 600 10px/1 var(--sans); padding: 3px 6px; border-radius: 3px; vertical-align: 2px; }
+  .tq-works { background: #1e3d29; color: #8fe0a8; }
+  .tq-changed { background: #3f321a; color: #f0c56a; }
+  .tq-dead, .tq-avoid { background: #472222; color: #ffaaaa; }
+  .tq-links { display: block; font-family: var(--sans); font-size: 12px; color: var(--ink-2); padding-left: 16px; }
+  .tq-link { color: var(--accent); }
   .map-card { margin-bottom: 14px; }
   #map { display: block; width: 100%; cursor: crosshair; border-radius: 4px; background: #0b0e12; margin-top: 8px; }
   .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin-top: 6px; }
@@ -144,6 +159,8 @@
     <button role="tab" data-tab="deploy">Deploy</button>
     <button role="tab" data-tab="logs">Logs</button>
     <button role="tab" data-tab="lint">UI lint</button>
+    <button role="tab" data-tab="registry">Registry</button>
+    <button role="tab" data-tab="techniques">Techniques</button>
     <button role="tab" data-tab="evidence">Evidence</button>
   </nav>
   <main>
@@ -249,17 +266,18 @@
     <section id="tab-deploy" hidden>
       <div class="row" style="margin-bottom:10px">
         <input id="dep-dir" placeholder="/path/to/your/mod-folder" style="flex:1;min-width:320px" class="mono">
-        <button id="dep-plan" class="primary">Check</button>
+        <button id="dep-plan" class="primary">Plan</button>
+        <button id="dep-check" title="Read the mod's files against the installed game: will it start a game, and what does it collide with?">Pre-flight</button>
         <button id="dep-go" disabled>Deploy and prove</button>
         <button id="dep-prove" title="Copy nothing; check whether the game serves your current source">Prove live</button>
       </div>
-      <p class="note">Copies the files your modinfo declares into whichever copy Mods.sqlite says the game loads, refusing a Workshop copy. Then it checks whether the page reloaded and whether the game now serves your new bytes. Data and text files only apply in a new game.</p>
+      <p class="note">Pre-flight reads the mod against the installed game without running it: whether its data, text and imports will load, and what it collides with among the mods the game will load. Copies the files your modinfo declares into whichever copy Mods.sqlite says the game loads, refusing a Workshop copy. Then it checks whether the page reloaded and whether the game now serves your new bytes. Data and text files only apply in a new game.</p>
       <div id="deploy" class="card"><span class="muted">Point it at a mod's source folder.</span></div>
     </section>
 
     <section id="tab-lint" hidden>
       <div class="row" style="margin-bottom:10px">
-        <input id="lint-scope" placeholder="optional CSS selector, e.g. .demographics-screen" style="width:320px" class="mono">
+        <input id="lint-scope" placeholder="optional CSS selector, e.g. .my-mod-screen" style="width:320px" class="mono">
         <button id="lint-run" class="primary">Lint the live UI</button>
         <span id="lint-meta" class="muted"></span>
       </div>
@@ -287,6 +305,12 @@
         <span id="mods-summary" class="muted"></span>
       </div>
       <p class="note">Read from Mods.sqlite, the game's record of which copy of each mod it loads. A duplicated mod id is the usual reason edits do nothing or the screen goes blank. With writes armed and the game closed, switch a copy on or off or choose which copy loads; the game applies it at its next launch, and Undo reverts it.</p>
+      <div class="row" style="margin:12px 0 8px">
+        <button id="conf-run">Check conflicts</button>
+        <select id="conf-level"><option value="medium">High and Medium</option><option value="low">Everything</option></select>
+        <span id="conf-meta" class="muted"></span>
+      </div>
+      <div id="conflicts" class="card" hidden></div>
       <div id="mods" class="card"></div>
     </section>
 
@@ -305,6 +329,32 @@
         <span id="log-count" class="muted"></span>
       </div>
       <div id="logs" class="card logs"></div>
+    </section>
+
+    <section id="tab-registry" hidden>
+      <div class="row" style="margin-bottom:10px">
+        <button id="reg-load" class="primary">Read the running game</button>
+        <span id="reg-meta" class="muted"></span>
+      </div>
+      <p class="note">What actually won: legacy components a mod replaced or styled, ui-next components registered above the base priority, and the mods this game applied set against the ones the next launch will load. The static conflict check in the Mods tab predicts collisions; this shows the outcome.</p>
+      <div id="registry" class="card"><span class="muted">Works on the main menu or in a game.</span></div>
+    </section>
+
+    <section id="tab-techniques" hidden>
+      <div class="row" style="margin-bottom:10px">
+        <input id="tq-search" placeholder="Search by purpose or engine object" style="width:280px">
+        <select id="tq-show">
+          <option value="use">Techniques that work</option>
+          <option value="avoid">Patterns to avoid</option>
+          <option value="all">Everything</option>
+        </select>
+        <span id="tq-meta" class="muted"></span>
+      </div>
+      <p class="note">Techniques used successfully in Civilization VII mods, described by what they are for and why they work. Findings elsewhere in the bench link here when one of these is the fix.</p>
+      <div class="row tq-wrap">
+        <div id="tq-list" class="card tq-list"></div>
+        <div id="tq-entry" class="card tq-detail"></div>
+      </div>
     </section>
 
     <section id="tab-evidence" hidden>

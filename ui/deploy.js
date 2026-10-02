@@ -1,4 +1,5 @@
 import { $, h, api, toast, headRow, messageOf } from "./core.js";
+import { techniqueLinks } from "./techniques.js";
 
 const depDir = () => $("dep-dir").value.trim();
 
@@ -46,7 +47,7 @@ function planKids(r) {
 
 function renderPlan(r) {
   const p = r.plan;
-  $("deploy").replaceChildren(...(p.refuse ? [h("p", { class: "error" }, p.refuse)] : planKids(r)));
+  $("deploy").replaceChildren(...(p.refuse ? [h("p", { class: "error" }, p.refuse, techniqueLinks(p.techniques))] : planKids(r)));
   $("dep-go").disabled = !!p.refuse || p.inPlace || !(p.changes ?? []).length || r.applied;
 }
 
@@ -57,7 +58,7 @@ function renderProof(r) {
   // replaceChildren would print a null as the text "null", so absent parts are dropped first.
   $("deploy").replaceChildren(...[
     h("p", { class: stale ? "error" : "ok" }, summary),
-    r.refuse ? h("p", { class: "sev-warn" }, r.refuse) : null,
+    r.refuse ? h("p", { class: "sev-warn" }, r.refuse, techniqueLinks(r.techniques)) : null,
     h("table", {}, h("tbody", {}, r.files.map((f) => h("tr", {}, h("td", {}, f.rel),
       h("td", { class: f.live === "SERVED" ? "ok" : "error" }, f.live))))),
   ].filter((el) => el !== null));

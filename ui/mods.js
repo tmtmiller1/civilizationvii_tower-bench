@@ -1,5 +1,6 @@
 import { $, h, api, muted, errorSpan, messageOf, registryLocked, toast } from "./core.js";
 import { refreshStatus } from "./status.js";
+import { techniqueLinks } from "./techniques.js";
 
 const flagLabel = (c) => (c.disabled === null || c.disabled === undefined ? "default" : c.enabled ? "on" : "off");
 
@@ -40,7 +41,7 @@ function modRow(m) {
     h("div", {}, h("strong", {}, m.id), m.name !== m.id ? muted(`  ${m.name}`) : null,
       m.authors ? muted(`  by ${m.authors}`) : null, m.enabled ? null : muted("  (off)")),
     m.copies.map((c) => copyRow(m, c)),
-    m.issues.map((i) => h("div", { class: `issue sev-${i.severity}` }, i.text)));
+    m.issues.map((i) => h("div", { class: `issue sev-${i.severity}` }, i.text, techniqueLinks(i.techniques))));
 }
 
 export async function loadMods() {
