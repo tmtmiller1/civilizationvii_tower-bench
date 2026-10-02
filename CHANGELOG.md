@@ -35,6 +35,8 @@ All notable changes to Tower Bench are documented here. This project follows sem
   `--allow-writes`, `--allow-lab` or `--allow-eval`, every call logged as evidence.
 - `nightly`: overnight checks after a game update (index, impact, pre-flight, l10n, every recipe in lab games) with a
   morning report of what newly fails; schedulable with launchd. `lab` and `bisect` refuse while a nightly runs.
+- `atlas`: an engine API reference built from the game's own scripts, declaration files, findings docs and a
+  read-only live crawl; search, show, diff between versions, Markdown export.
 - Examples in the README and the lint placeholder no longer name particular mods.
 
 ## [0.1.0] - 2026-09-29

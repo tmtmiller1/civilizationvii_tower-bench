@@ -319,6 +319,29 @@ launchd agent on macOS (on Windows and Linux it prints the schtasks or cron line
 --yes` removes it. The orchestration, reports and schedule generation are tested; the lab games and the scheduled launch
 have not been watched end to end.
 
+## Engine API atlas
+
+```
+node tower-bench.mjs atlas build --verdicts my-findings.md
+node tower-bench.mjs atlas build --live
+node tower-bench.mjs atlas show Game.PlayerOperations.sendRequest
+node tower-bench.mjs atlas export --md ./api-reference
+```
+
+Civilization VII ships no API reference for its script globals, so the bench builds one from the engine itself. `atlas
+build` reads every script the installed game ships and records each `Root.member` the game uses on an engine global: how
+often, the argument counts it is called with, and example call sites, plus the event names it listens for or fires (on
+1.5.0: 233 roots, 2,187 members, 352 events). `--sdk DIR` adds declared signatures from .d.ts files. `--verdicts FILE`
+attaches findings from a Markdown list whose entries lead with a bold claim, name the API in code spans and say
+"Evidence: watched", "inferred" or "reported" with a date. `--live` adds a read-only crawl of the page the debugger is
+on, kept per scope: it reads property descriptors and function arities, never calls an engine function, and reads a
+getter only where the game's own scripts read that property.
+
+Each member is marked LIVE, USED, DOCUMENTED or WATCHED. `atlas show`, `atlas search` and the API atlas tab read the
+result, `atlas diff` lists members added, removed or changed between game versions, and `atlas export --md` writes a
+Markdown reference with no local paths, ready to publish. The usage index and the findings parser were checked against
+the installed game; the live crawl is tested against a fake engine only.
+
 ## Doctor: "my mod does not work"
 
 ```

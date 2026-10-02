@@ -21,6 +21,7 @@ import "./patch.js";
 import "./cost.js";
 import "./release.js";
 import "./nightly.js";
+import "./atlas.js";
 
 const TAB_LOADERS = {
   mods: () => loadMods(),
