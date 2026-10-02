@@ -267,6 +267,34 @@ The database checks read the schema from the game's `Debug/gameplay-copy.sqlite`
 has loaded; until then they are skipped and the output says so. `--schema DIR` points at a saved copy of that folder
 instead. The Mods tab has a Check conflicts button and the Deploy tab a Pre-flight button.
 
+## AI assistants (MCP)
+
+```
+claude mcp add tower-bench -- node /path/to/tower-bench.mjs mcp
+claude mcp add tower-bench -- node /path/to/tower-bench.mjs mcp --allow-writes
+```
+
+```json
+{ "mcpServers": { "tower-bench": { "command": "node", "args": ["/path/to/tower-bench.mjs", "mcp"] } } }
+```
+
+`mcp` serves the bench to an AI assistant over the Model Context Protocol on stdio, so Claude Code, Claude Desktop or
+any other MCP client can read the game and its files with the same tools you use. It has no dependencies, and clients
+that use the initialize handshake are supported.
+The assistant can do no more than you could with the CLI, and by default less. Without flags every tool is read-only:
+status, plot, the SQL console, snapshots and diffs, events, logs, mods and conflicts, check, doctor, crash triage,
+game impact, database diffs, the registry view, lint, techniques and the evidence log. Tools that change
+something (map writes, game-state actions, undo, deploy, mod switches, recipes, lab turns and lab stop) are listed but
+refused until you start the server with `--allow-writes`, and the bench is armed for that one call only. `lab_start` and
+`bisect` also need `--allow-lab`. The JavaScript console is not listed without `--allow-eval`, and a recipe whose steps
+run code needs it too. `lab_turns` keeps the lab's own refusal: it never ends turns in a game the lab did not start.
+Every call, refused or not, is recorded in the evidence log as kind `mcp`.
+Tool descriptions tell the assistant what a verdict means (LANDED is the change read back from the game; the engine's
+own return value proves nothing) and that a static finding is a hypothesis to prove in a lab game before acting on it.
+The techniques library and the evidence log are also offered as MCP resources. stdout carries protocol messages only.
+Tested by exchanging JSON-RPC with the server over stdio and against real files read-only; not yet watched driving a
+running game.
+
 ## Doctor: "my mod does not work"
 
 ```

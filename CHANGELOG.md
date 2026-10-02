@@ -31,6 +31,8 @@ All notable changes to Tower Bench are documented here. This project follows sem
 - `release-check` and `l10n`, plus lint rules for text that draws as boxes.
 - Techniques are marked watched by the bench when a lab recipe that lists them passes.
 - Feature tabs register themselves; evidence shows before and after values for game-state actions.
+- `mcp`: an MCP server over stdio so AI assistants can use the bench; read-only unless started with
+  `--allow-writes`, `--allow-lab` or `--allow-eval`, every call logged as evidence.
 - Examples in the README and the lint placeholder no longer name particular mods.
 
 ## [0.1.0] - 2026-09-29
