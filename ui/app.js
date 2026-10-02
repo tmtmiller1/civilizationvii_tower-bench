@@ -22,6 +22,7 @@ import "./cost.js";
 import "./release.js";
 import "./nightly.js";
 import "./atlas.js";
+import "./sim.js";
 
 const TAB_LOADERS = {
   mods: () => loadMods(),

@@ -37,6 +37,9 @@ All notable changes to Tower Bench are documented here. This project follows sem
   morning report of what newly fails; schedulable with launchd. `lab` and `bisect` refuse while a nightly runs.
 - `atlas`: an engine API reference built from the game's own scripts, declaration files, findings docs and a
   read-only live crawl; search, show, diff between versions, Markdown export.
+- `sim diff` / `sim repeat`: the same seeded game with a mod off and on, the first divergence, and a determinism
+  control; `fuzz`: random verified actions with invariants, failures shrunk to a minimal recipe; `arena`: balance
+  across seeds with bootstrap intervals. `lab` and `bisect` refuse while any long run is going.
 - Examples in the README and the lint placeholder no longer name particular mods.
 
 ## [0.1.0] - 2026-09-29

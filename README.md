@@ -342,6 +342,37 @@ result, `atlas diff` lists members added, removed or changed between game versio
 Markdown reference with no local paths, ready to publish. The usage index and the findings parser were checked against
 the installed game; the live crawl is tested against a fake engine only.
 
+## Differential simulation, fuzzing and the balance arena
+
+```
+node tower-bench.mjs sim repeat --yes --seed 4242 --turns 10
+node tower-bench.mjs sim diff my-mod --yes --turns 30
+node tower-bench.mjs fuzz --yes --runs 20 --steps 15
+node tower-bench.mjs arena my-mod --yes --games 10 --turns 100
+```
+
+Three tools share one engine: a seeded lab game driven turn by turn without Autoplay, sampled at every turn start (the
+whole map plus each player's yields, treasury, settlements, population, units, techs, civics and legacy points), then
+quit with your saves, settings and registry restored. Every game is logged as evidence and every run writes a report
+(`sim runs`, `sim show <name>`, or the Simulate tab).
+
+`sim diff` plays one seed with the mod off and then on and reports the first turn the games differ, with what differs,
+and a per-turn divergence curve. A difference is only called the mod's doing when a determinism control (`sim repeat`:
+the same seed twice with the same mods) stayed identical at least that far; without one the verdict is UNCONTROLLED, and
+`--control` runs one first.
+
+`fuzz` applies random verified writes and game-state actions with turn rolls in between, and after every step checks
+that the game is alive, that no mod logged an error or threw on the page, that no database rollback happened, and that
+your invariants (`--invariants FILE`) hold. A failure is replayed once from the same seed (a failure that does not come
+back is reported as flaky), then shrunk by delta debugging to a minimal recipe you run with `lab run`.
+
+`arena` plays many seeds with the mod off and on and reports per-civ lead rates, mean curves with bootstrap intervals,
+and the mod's effect on each figure with an interval. There is no known all-AI observer game, so your player takes part
+passively (turns ended, no choices) and is left out of the numbers.
+
+Not watched: all three are tested against fakes only, and whether one seed repeats turn for turn is what `sim repeat` is
+there to find out. Until a control passes, nothing these tools report should be read as the mod's doing.
+
 ## Doctor: "my mod does not work"
 
 ```
