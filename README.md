@@ -340,7 +340,9 @@ getter only where the game's own scripts read that property.
 Each member is marked LIVE, USED, DOCUMENTED or WATCHED. `atlas show`, `atlas search` and the API atlas tab read the
 result, `atlas diff` lists members added, removed or changed between game versions, and `atlas export --md` writes a
 Markdown reference with no local paths, ready to publish. The usage index and the findings parser were checked against
-the installed game; the live crawl is tested against a fake engine only.
+the installed game. The live crawl was watched on 1.5.0 on 2026-10-03: 5,792 records in a game (25 ms, 168 members
+found by probe, 0 errors) and 1,759 on the main menu (8 ms), neither truncated, with nothing written to UI.log and the
+game unchanged.
 
 ## Differential simulation, fuzzing and the balance arena
 
@@ -400,8 +402,9 @@ file what ran and every function that never did, and `coverage restore` puts the
 
 Checked offline: the instrumenter's copies of 3,903 published-mod files all parse, its function and block finding
 matches TypeScript's parser on every one, and on 509 real modules run under Node its call counts match V8's own precise
-coverage for 4,200 of 4,201 functions. Not yet watched in the game: whether its debugger answers the Profiler domain,
-and either route end to end.
+coverage for 4,200 of 4,201 functions. Watched on 1.5.0 on 2026-10-03: the game's debugger answers the Profiler domain
+and `takePreciseCoverage` returns scripts with function ranges, so the CDP route is open. Mod scripts load as
+`fs://game/<mod id>/<path>`, not by folder name. Neither route has been watched end to end yet.
 
 ## Doctor: "my mod does not work"
 
@@ -736,6 +739,16 @@ and the player's autosaves, LocalStorage, Hall of Fame and options files matched
 `LANDED`; at the game's next launch (started by another test harness on the same machine) `Modding.log` applied every
 enabled mod except that one; the Undo button then put the flag back, and all 113 registry rows matched a snapshot taken
 before the switch.
+
+**Watched live, 2026-10-03, game 1.5.0, a seeded lab game (seed 4242) and the main menu:** `coverage probe` got
+answers to every Profiler call (`Schema.getDomains` lists Runtime, Debugger, Profiler, HeapProfiler and Schema; a short
+precise-coverage window returned 9 scripts and 25 functions); only `/json/protocol` is missing (HTTP 404). Mod scripts
+are served as `fs://game/<mod id>/...`: a Workshop copy in folder `3807593812` loads as
+`fs://game/tower-build-wonders-over-antiquated-buildings/...`. `atlas build --live` crawled the game page (5,792 records,
+25 ms) and the menu page (1,759 records, 8 ms), neither truncated, 0 errors; native objects such as `GameInfo.Units`
+were found by probe; `atlas show Game.turn` listed the game scope. UI.log gained no line from either crawl, and turn,
+gold and unit count were unchanged. `lab stop` afterwards restored all 115 registry rows, LocalStorage and Hall of Fame
+byte for byte.
 
 **Not watched yet (0.2.0 work, built and tested offline only):** the registry view, the canvas probe, counter and
 stress test, and the agent's canvas counting have run only against fake engines in the tests; none has run in a game.
