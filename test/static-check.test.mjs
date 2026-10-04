@@ -207,10 +207,8 @@ test("a file fetched at run time that no action declares is flagged; declared an
   const r = runtimeRefs(mod);
   assert.deepEqual(r.undeclared.map((u) => u.path).sort(), ["data/hidden.json", "ui/extra.js"]);
   assert.equal(r.unresolved, 1);
-  const f = checkMod(mod, { vanilla, schema, otherMods: [] }).filter((x) => x.rule === "undeclared-runtime-file");
-  assert.equal(f.length, 1);
-  assert.equal(f[0].verdict, "MINOR");
-  assert.match(f[0].text, /1 computed path/);
+  // The game serves undeclared files and imports undeclared modules (watched 2026-10-03), so check reports nothing.
+  assert.deepEqual(checkMod(mod, { vanilla, schema, otherMods: [] }).filter((x) => x.rule === "undeclared-runtime-file"), []);
 });
 
 test("a table another analysed mod creates is a dependency to declare, not an unknown table", () => {

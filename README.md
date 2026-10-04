@@ -750,8 +750,18 @@ were found by probe; `atlas show Game.turn` listed the game scope. UI.log gained
 gold and unit count were unchanged. `lab stop` afterwards restored all 115 registry rows, LocalStorage and Hall of Fame
 byte for byte.
 
-**Not watched yet (0.2.0 work, built and tested offline only):** the registry view, the canvas probe, counter and
-stress test, and the agent's canvas counting have run only against fake engines in the tests; none has run in a game.
+**Watched live, 2026-10-03, game 1.5.0, a second seeded lab game:** `registry` read the game page: the component
+registry and the active-mod list answer, the legacy `Controls` table is not on the page. Three mods that each register
+the ui-next `PlotTooltip` were all applied (Modding.log), and one won: `ReadableTooltipsPlotTooltip`, priority 1. Two
+enabled mods whose action groups all failed their criteria were correctly shown as not in this game. `canvas probe
+--k 1000` found no pool counter (16 candidates, none moving about once per paint call). Its first run stopped the
+bench: the game cuts `Performance.getMetrics` replies short unless a layout ran just before, and the CDP client
+threw on the frame. Now a frame that is not JSON fails only its own call, and the probe and `cost` keep the metrics
+that arrived; watched again after the fix. An XHR of files a mod's modinfo does not declare returned 200, and
+`import()` of an undeclared module worked, so `check` no longer flags undeclared runtime files.
+
+**Not watched yet (0.2.0 work, built and tested offline only):** the canvas counter and stress test and the agent's
+canvas counting have run only against fake engines in the tests.
 `mods conflicts` and `check` ran on a real install (22 enabled mods, 2.6 s) and, over a corpus of 1,249 published
 mods, flagged every statically detectable defect that had been watched blocking a game or killing a feature (17) and
 none of the 4 watched false flags. Their predictions are not watched; each finding says so. The web UI's Techniques,

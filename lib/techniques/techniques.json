@@ -1638,7 +1638,7 @@
       "title": "Load files with XMLHttpRequest, not fetch",
       "category": "gameface-css",
       "purpose": "Read a data or text file your mod ships from UI script.",
-      "why": "The UI context has no fetch (it is a ReferenceError). XMLHttpRequest works against fs://game paths and returns the file's exact text, for files the modinfo declares.",
+      "why": "The UI context has no fetch (it is a ReferenceError). XMLHttpRequest works against fs://game paths and returns the file's exact text, for any file in a loaded mod's folder, declared in the modinfo or not.",
       "when": "Loading JSON tables, templates or text you ship.",
       "whenNot": "Writing: an XHR PUT returns 200 and changes nothing. There is no file write.",
       "snippet": "export function readModFile(path) {\n  return new Promise((resolve, reject) => {\n    const xhr = new XMLHttpRequest();\n    xhr.open(\"GET\", `fs://game/my-mod/${path}`);\n    xhr.onload = () => (xhr.status === 200 || xhr.status === 0)\n      ? resolve(xhr.responseText)\n      : reject(new Error(`my-mod: ${path} -> ${xhr.status}`));\n    xhr.onerror = () => reject(new Error(`my-mod: cannot read ${path}`));\n    xhr.send();\n  });\n}\n\n// const table = JSON.parse(await readModFile(\"data/my-mod-table.json\"));",
