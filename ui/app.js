@@ -1,4 +1,4 @@
-import { TAB_REGISTRY, isOpen } from "./core.js";
+import { TAB_REGISTRY, api, isOpen, messageOf, toast } from "./core.js";
 import { refreshStatus } from "./status.js";
 import { drawMap } from "./map-canvas.js";
 import "./map.js";
@@ -56,11 +56,24 @@ events.addEventListener("log", (e) => addLogs(JSON.parse(e.data)));
 events.addEventListener("evidence", () => { if (isOpen("evidence")) loadEvidence(); });
 
 // Restored last, once everything the tab handlers call is defined. A #technique/<id> link opens that entry.
+// An extension's modules register their own tabs when imported; they import this page's helpers from "/core.js".
+async function loadExtensions() {
+  try {
+    const { modules } = await api("/api/extensions");
+    for (const url of modules) await import(url);
+  } catch (e) {
+    toast(`extension failed to load: ${messageOf(e)}`, true);
+  }
+}
+
 const deepLink = location.hash.match(/^#technique\/([\w-]+)$/)?.[1];
 if (deepLink) openTechnique(deepLink);
-else try {
-  const t = localStorage.getItem("tb-tab");
-  if (t) /** @type {HTMLElement | null} */ (document.querySelector(`nav button[data-tab="${t}"]`))?.click();
-} catch {}
+loadExtensions().then(() => {
+  if (deepLink) return;
+  try {
+    const t = localStorage.getItem("tb-tab");
+    if (t) /** @type {HTMLElement | null} */ (document.querySelector(`nav button[data-tab="${t}"]`))?.click();
+  } catch {}
+});
 refreshStatus();
 setInterval(refreshStatus, 3000);

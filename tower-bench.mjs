@@ -13,12 +13,12 @@ import { CHEATS_COMMANDS, CHEATS_HELP } from "./lib/cli/cheats.mjs";
 import { PATCH_COMMANDS, PATCH_HELP } from "./lib/cli/patch.mjs";
 import { COST_COMMANDS, COST_HELP } from "./lib/cli/cost.mjs";
 import { RELEASE_COMMANDS, RELEASE_HELP } from "./lib/cli/release.mjs";
-import { MCP_COMMANDS, MCP_HELP } from "./lib/cli/mcp.mjs";
 import { NIGHTLY_COMMANDS, NIGHTLY_HELP } from "./lib/cli/nightly.mjs";
 import { ATLAS_COMMANDS, ATLAS_HELP } from "./lib/cli/atlas.mjs";
 import { SIM_COMMANDS, SIM_HELP } from "./lib/cli/sim.mjs";
 import { COVERAGE_COMMANDS, COVERAGE_HELP } from "./lib/cli/coverage.mjs";
 import { LIBRARY_COMMANDS } from "./lib/cli/library.mjs";
+import { extensions, merged } from "./lib/extensions.mjs";
 
 const HELP = `tower-bench: a live test bench for Civilization VII mods
 
@@ -88,7 +88,8 @@ re-read until the change is observed, recorded in an evidence log, and can be un
   techniques [query]                   techniques that work in Civ VII mods, by purpose or engine object
   techniques show <id>                 one technique: why it works, when to use it, a snippet, pitfalls
 
-${[LABTOOLS_HELP, DOCTOR_HELP, CHEATS_HELP, PATCH_HELP, COST_HELP, RELEASE_HELP, MCP_HELP, NIGHTLY_HELP, ATLAS_HELP, SIM_HELP, COVERAGE_HELP].map((s) => s.replace(/\n?$/, "\n")).join("")}
+${[LABTOOLS_HELP, DOCTOR_HELP, CHEATS_HELP, PATCH_HELP, COST_HELP, RELEASE_HELP, NIGHTLY_HELP, ATLAS_HELP, SIM_HELP, COVERAGE_HELP,
+  ...extensions().flatMap((e) => (e.help ? [e.help] : []))].map((s) => s.replace(/\n?$/, "\n")).join("")}
 <where> is "x y", "cursor" (plot under the mouse), "selected" (the selected unit's plot) or
 "unit" (the local player's first unit). Writes change the running game and need --yes.
 --owner defaults to the local player.
@@ -98,10 +99,10 @@ ${[LABTOOLS_HELP, DOCTOR_HELP, CHEATS_HELP, PATCH_HELP, COST_HELP, RELEASE_HELP,
 const COMMANDS = { ...GAME_COMMANDS, ...FILE_COMMANDS, ...EVENT_COMMANDS, ...LAB_COMMANDS, ...LIBRARY_COMMANDS,
   ...INSPECT_COMMANDS, ...LABTOOLS_COMMANDS, ...DOCTOR_COMMANDS, ...CHEATS_COMMANDS,
   ...PATCH_COMMANDS, ...COST_COMMANDS, ...RELEASE_COMMANDS,
-  ...MCP_COMMANDS, ...NIGHTLY_COMMANDS, ...ATLAS_COMMANDS, ...SIM_COMMANDS,
-  ...COVERAGE_COMMANDS };
+  ...NIGHTLY_COMMANDS, ...ATLAS_COMMANDS, ...SIM_COMMANDS,
+  ...COVERAGE_COMMANDS, ...merged("commands") };
 
-const { values: opt, positionals: pos } = parseCli();
+const { values: opt, positionals: pos } = parseCli(merged("options"));
 const paths = resolvePaths();
 const bench = new Bench(paths);
 

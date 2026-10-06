@@ -13,6 +13,10 @@ node tower-bench.mjs --help                         # every command
 No dependencies. It talks to the game's UI debugger (Chrome DevTools Protocol on port 9444) with Node's built-in
 `WebSocket`, and reads `Mods.sqlite` through the `sqlite3` CLI that ships with macOS.
 
+Tower Bench is for testing mods in single-player test games. It can play turns by script and grant resources, so it
+refuses to change a multiplayer game or a game that can earn achievements. Do not use it in games where you play for
+other progress.
+
 ## Screenshots
 
 Every image below is the bench in use on a real game (1.5.0, a seeded Play Now game started by `lab start`, nine turns
@@ -60,6 +64,8 @@ re-read until it `LANDED` in 56 ms.
 - The `sqlite3` command-line tool (ships with macOS).
 - Civilization VII running with its UI debugger on port 9444. On macOS, game 1.5.0, it answered with `AppOptions.txt`
   left at its defaults; if nothing answers, set `UIDebugger 1` there and relaunch.
+- To change a game (writes, game-state actions, the console in a game): `EnableTuner 1` in `AppOptions.txt`, set before
+  the game was launched. The game does not unlock achievements while the tuner is on. Reading works without it.
 
 ## Inspect and change the game
 
@@ -266,34 +272,6 @@ lists the mod's conflicts with the mods the game will load alongside it.
 The database checks read the schema from the game's `Debug/gameplay-copy.sqlite`, which the game fills only once a game
 has loaded; until then they are skipped and the output says so. `--schema DIR` points at a saved copy of that folder
 instead. The Mods tab has a Check conflicts button and the Deploy tab a Pre-flight button.
-
-## AI assistants (MCP)
-
-```
-claude mcp add tower-bench -- node /path/to/tower-bench.mjs mcp
-claude mcp add tower-bench -- node /path/to/tower-bench.mjs mcp --allow-writes
-```
-
-```json
-{ "mcpServers": { "tower-bench": { "command": "node", "args": ["/path/to/tower-bench.mjs", "mcp"] } } }
-```
-
-`mcp` serves the bench to an AI assistant over the Model Context Protocol on stdio, so Claude Code, Claude Desktop or
-any other MCP client can read the game and its files with the same tools you use. It has no dependencies, and clients
-that use the initialize handshake are supported.
-The assistant can do no more than you could with the CLI, and by default less. Without flags every tool is read-only:
-status, plot, the SQL console, snapshots and diffs, events, logs, mods and conflicts, check, doctor, crash triage,
-game impact, database diffs, the registry view, lint, techniques and the evidence log. Tools that change
-something (map writes, game-state actions, undo, deploy, mod switches, recipes, lab turns and lab stop) are listed but
-refused until you start the server with `--allow-writes`, and the bench is armed for that one call only. `lab_start` and
-`bisect` also need `--allow-lab`. The JavaScript console is not listed without `--allow-eval`, and a recipe whose steps
-run code needs it too. `lab_turns` keeps the lab's own refusal: it never ends turns in a game the lab did not start.
-Every call, refused or not, is recorded in the evidence log as kind `mcp`.
-Tool descriptions tell the assistant what a verdict means (LANDED is the change read back from the game; the engine's
-own return value proves nothing) and that a static finding is a hypothesis to prove in a lab game before acting on it.
-The techniques library and the evidence log are also offered as MCP resources. stdout carries protocol messages only.
-Tested by exchanging JSON-RPC with the server over stdio and against real files read-only; not yet watched driving a
-running game.
 
 ## Nightly regression runs
 
@@ -642,6 +620,14 @@ your files are restored after every game.
 
 ## Safety
 
+- Nothing that changes the game runs in a multiplayer game. Before a map write, game-state action, undo, recipe step or
+  console call in a game, the bench reads the flags the game's own UI uses (`Configuration.getGame()`
+  `isAnyMultiplayer`, `isNetworkMultiplayer`, `isHotseat`) and refuses unless all three are false, including when it
+  cannot read them. The console on the main menu is not affected.
+- Nothing that changes the game runs in a game that can earn achievements. The same changes are refused unless
+  `AppOptions.txt` has `EnableTuner 1` (the game does not unlock achievements while the tuner is on, as the file and the
+  Options screen say), does not have `AchievementsRestrictedByTuner 0`, and has not changed since the game launched.
+  If any of that cannot be read, the change is refused.
 - Map writes (place, remove, set, undo) and mod switches are disarmed until armed in the UI or confirmed with `--yes` on
   the CLI. The console, watches and deploy are not gated by arming: the console runs whatever JavaScript you give it in
   the game, and deploy copies files and reloads the game's UI. The SQL console refuses anything but a single read.
@@ -654,6 +640,12 @@ your files are restored after every game.
   socket on this machine.
 - The debugger port itself is the game's, not this tool's. While the game runs with it open, anything on the machine
   can reach it.
+
+## Extensions
+
+A separate tool can add commands, flags, server routes and a page tab without changing the bench: it calls
+`registerExtension` from `lib/extensions.mjs` and then imports `tower-bench.mjs`. Its page modules are served from
+`/ext/<name>/` and import the page's helpers from `/core.js`. The bench itself registers no extensions.
 
 ## Configuration
 
@@ -775,6 +767,11 @@ came from that analysis); `crash` over 14 real crash reports (4 signatures); `do
 `release-check` and `l10n` on real mod folders and packages. Every tab was driven in headless Chrome with no console
 errors and the bench pointed away from any game. The game-state actions, `cost`, the lab halves of `dbdiff` and
 `mods conflicts --prove`, the connected `doctor` steps and `l10n live` ran only against fakes.
+
+**Watched live, 2026-10-06, game 1.5.0, a single-player game on turn 147:** the game's three multiplayer flags read
+`false` and a console read went through the new guard; with `TOWER_BENCH_USER_DIR` pointed at a copy of
+`AppOptions.txt` with the tuner off, the same call was refused before anything reached the game. A real multiplayer or
+hotseat game has not been tried; that refusal is covered by the tests only.
 
 **NOT verified yet:** the `lab run` command as a whole (its parts ran inside bisect), the Windows default paths, and the
 hint for a land unit sent to water as shown in a live write (its inputs, `GameplayMap.isWater` and the unit's `Domain`,

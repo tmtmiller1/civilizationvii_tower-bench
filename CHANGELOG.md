@@ -4,6 +4,11 @@ All notable changes to Tower Bench are documented here. This project follows sem
 
 ## [Unreleased]
 
+- Writes, game-state actions, undo, recipe steps and the console are refused in a multiplayer (network or hotseat)
+  game, and when the bench cannot tell whether the game is multiplayer.
+- The same changes are refused unless the game was launched with the tuner on (`EnableTuner 1` in `AppOptions.txt`,
+  without `AchievementsRestrictedByTuner 0`), so a game the bench changes cannot earn achievements.
+- Extensions: `lib/extensions.mjs` lets a separate tool add commands, flags, server routes and a page tab.
 - Logs: a failed database action reads as one incident. The file and action group that failed and the outcome (the game
   will not start that content, or the main-menu configuration fails) are errors with hints; the rollback lines after
   them are noise. New signatures for invalid references to removed types, imports of `.chunk.js` bundle files, and
@@ -31,8 +36,6 @@ All notable changes to Tower Bench are documented here. This project follows sem
 - `release-check` and `l10n`, plus lint rules for text that draws as boxes.
 - Techniques are marked watched by the bench when a lab recipe that lists them passes.
 - Feature tabs register themselves; evidence shows before and after values for game-state actions.
-- `mcp`: an MCP server over stdio so AI assistants can use the bench; read-only unless started with
-  `--allow-writes`, `--allow-lab` or `--allow-eval`, every call logged as evidence.
 - `nightly`: overnight checks after a game update (index, impact, pre-flight, l10n, every recipe in lab games) with a
   morning report of what newly fails; schedulable with launchd. `lab` and `bisect` refuse while a nightly runs.
 - `atlas`: an engine API reference built from the game's own scripts, declaration files, findings docs and a
