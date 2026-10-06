@@ -4,6 +4,8 @@ All notable changes to Tower Bench are documented here. This project follows sem
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-06
+
 - Writes, game-state actions, undo, recipe steps and the console are refused in a multiplayer (network or hotseat)
   game, and when the bench cannot tell whether the game is multiplayer.
 - The same changes are refused unless the game was launched with the tuner on (`EnableTuner 1` in `AppOptions.txt`,
