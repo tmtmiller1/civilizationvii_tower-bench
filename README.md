@@ -204,6 +204,9 @@ hits in 511 elements, both the base game's own; point `--scope` at a mod's root 
 local one is a warning, a copy inside another mod's `dist/` is a shadow, and an enabled test probe is flagged because it
 loads into every game, your campaign included. Names and authors are resolved through each mod's own `LocalizedText`,
 and `--filter` (or the box in the Mods tab) matches id, name or author, so `--filter <author>` lists one author's mods.
+Each copy is named by where it lives, `Mods/my-mod` or `Workshop 1234567890`, and that name is what `on`, `off` and
+`live` take. When two copies of one mod would get the same name, say a copy nested inside the other's folder, both are
+named down to the folder holding the modinfo instead: `Mods/my-mod` and `Mods/my-mod/1234567890`.
 
 ```
 node tower-bench.mjs mods --filter my-mod

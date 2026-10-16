@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { modHealth, sourceOf } from "../lib/mods.mjs";
+import { modHealth, planModChange, sourceOf } from "../lib/mods.mjs";
 
 const paths = { userMods: "/U/Library/Application Support/Civilization VII/Mods" };
 const WS = "/U/Library/Application Support/Steam/steamapps/workshop/content/1295660";
@@ -66,4 +66,52 @@ test("a LOC tag name falls back to a readable name from another copy", () => {
     row("x", `${paths.userMods}/x/x.modinfo`, 1, { name: "Readable X" }),
   ], paths);
   assert.equal(m.name, "Readable X");
+});
+
+// Watch run 2, block 1: the keeper had a copy nested in its own folder, in Mods/ and in the Workshop item, and
+// `mods live tower-settings-keeper Mods/tower-settings-keeper` was refused because two copies shared each label.
+const keeper = () => modHealth([
+  row("keeper", `${WS}/3815023570/keeper.modinfo`, 1),
+  row("keeper", `${WS}/3815023570/3815023570/keeper.modinfo`, 1),
+  row("keeper", `${paths.userMods}/tower-settings-keeper/keeper.modinfo`, 0),
+  row("keeper", `${paths.userMods}/tower-settings-keeper/3815023570/keeper.modinfo`, 0),
+], paths)[0];
+
+test("copies that would share a label are named down to the folder holding the modinfo", () => {
+  assert.deepEqual(keeper().copies.map((c) => c.source.label), [
+    "Workshop 3815023570", "Workshop 3815023570/3815023570",
+    "Mods/tower-settings-keeper", "Mods/tower-settings-keeper/3815023570",
+  ]);
+});
+
+test("each longer label picks exactly one copy", () => {
+  const m = keeper();
+  for (const c of m.copies) {
+    const plan = planModChange([m], { op: "live", id: "keeper", copy: c.source.label });
+    assert.equal(plan.refuse, undefined, c.source.label);
+    const live = m.copies.filter((o) => (plan.changes.find((ch) => ch.path === o.path)?.to ?? o.disabled) === 0);
+    assert.deepEqual(live.map((o) => o.path), [c.path]);
+  }
+});
+
+test("two modinfos in one folder are told apart by file name", () => {
+  const [m] = modHealth([
+    row("x", `${paths.userMods}/x/a.modinfo`, 0),
+    row("x", `${paths.userMods}/x/b.modinfo`, 1),
+  ], paths);
+  assert.deepEqual(m.copies.map((c) => c.source.label), ["Mods/x/a.modinfo", "Mods/x/b.modinfo"]);
+});
+
+test("a label that is already unique stays short", () => {
+  const [m] = modHealth([
+    row("demographics", `${WS}/1234567890/demographics/demographics.modinfo`, 1),
+    row("demographics", `${paths.userMods}/demographics/demographics.modinfo`, 0),
+  ], paths);
+  assert.deepEqual(m.copies.map((c) => c.source.label), ["Workshop 1234567890", "Mods/demographics"]);
+});
+
+test("a copy that isn't there is refused with every copy's label, quoted to paste back", () => {
+  const plan = planModChange([keeper()], { op: "live", id: "keeper", copy: "Mods/keeper" });
+  assert.equal(plan.refuse, 'keeper has no copy "Mods/keeper"; its copies: "Workshop 3815023570", '
+    + '"Workshop 3815023570/3815023570", "Mods/tower-settings-keeper", "Mods/tower-settings-keeper/3815023570"');
 });
