@@ -4,7 +4,7 @@ import globals from "globals";
 
 // Engine globals referenced by the functions in lib/engine.mjs, which run inside the game's page.
 const ENGINE_GLOBALS = Object.fromEntries([
-  "Autoplay", "Cities", "Configuration", "Controls", "Database", "DirectionTypes", "engine", "Game", "GameContext", "GameInfo",
+  "Autoplay", "Cities", "Configuration", "ContextManager", "Controls", "Database", "DirectionTypes", "engine", "Game", "GameContext", "GameInfo",
   "FeatureTypes", "GameplayMap", "GameSetup", "GameModeTypes", "Locale", "MapCities", "MapConstructibles", "MapUnits",
   "Modding", "Network", "PlayerOperationTypes", "Players", "ResourceTypes", "RevealedStates", "UI", "UnitCommandTypes",
   "Units", "Visibility", "WorldBuilder", "YieldTypes",

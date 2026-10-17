@@ -201,8 +201,10 @@ test("version order, escaping entries and the .vdf reader", () => {
 
 test("the CLI and routes refuse a call without a folder, and help lines fit the help column", async () => {
   const { RELEASE_COMMANDS, RELEASE_HELP, RELEASE_ROUTES } = await import("../lib/cli/release.mjs");
-  assert.deepEqual(Object.keys(RELEASE_COMMANDS).sort(), ["l10n", "release-check"]);
+  assert.deepEqual(Object.keys(RELEASE_COMMANDS).sort(), ["l10n", "release-check", "workshop-upload"]);
   for (const line of RELEASE_HELP.split("\n")) assert.ok(line.length <= 104, line);
+  const ctx = /** @type {any} */ ({ opt: {} });
+  await assert.rejects(async () => RELEASE_COMMANDS["workshop-upload"](ctx, [], "workshop-upload"), /workshop-upload <file\.vdf>/);
   const q = new URLSearchParams();
   assert.throws(() => RELEASE_ROUTES["GET /api/release-check"](bench(), null, q), /which mod folder or zip/);
   assert.throws(() => RELEASE_ROUTES["GET /api/l10n"](bench(), null, q), /which mod folder/);

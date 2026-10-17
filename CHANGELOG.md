@@ -4,6 +4,43 @@ All notable changes to Tower Bench are documented here. This project follows sem
 
 ## [Unreleased]
 
+- `lab start --setup fast` starts the test game with an abbreviated age, friendly independents and Settler difficulty,
+  so an idle test player keeps its city and the age ends sooner. Single values work too
+  (`--setup fast,MapSize=MAPSIZE_TINY`). After the game starts, the lab reads each value back from the running game
+  and warns about any it didn't take.
+- `lab start --quick` turns on quick combat and quick movement, turns off the historic-moment animation and skips the
+  era welcome screens for that game. The option files go back at `lab stop`, like the rest.
+- `lab drive <turns>` plays turns with one-turn Autoplay re-armed from inside the game, so the mods' per-turn work
+  runs every turn and no shell round trip is needed. It closes pop-ups as it goes, takes a reading every
+  `--every` turns from `--sample file.js`, picks back up after a new age reloads the page, and writes its lines to
+  `drive.log` in the run folder.
+- `lab popups [clear|list|suspend|resume]` closes, lists or holds back the game's pop-ups and pushed screens, and
+  names each one it closes. `--keep` leaves the named categories alone. Watched 2026-10-17 on two age changes and a
+  Modern game: `list` named the end-of-age pop-ups and the pushed screens, `clear` named each pop-up it closed and
+  `screen-dialog-box`, and the camera moved after. A screen that closes along with its pop-up
+  (`screen-tech-civic-complete`, `advisor-council-popup`, `mouse-guard`) closes but isn't named.
+- `lab turns` carries on through the end of an age: the last turn counts once the next age's first turn is up and
+  its loading screen has cleared, where before it timed out waiting on the age change. Watched 2026-10-17: "turn 120
+  -> 1, into the next age", and the next command found the game past its loading screen.
+- `lab drive <turns> --stop-before-age-end <points>` stops the drive once the age's progress is within that many
+  points of its maximum, and says so. If the age ends inside the drive anyway, the drive stops there. Watched
+  2026-10-17 in three games: `lab drive 200 --stop-before-age-end 10` stopped at "age progress 110 of 120, within 10
+  of the age's end" after 100 to 109 turns.
+- `lab age-change` crosses into the next age without Autoplay: it ends one turn at a time until the age changes,
+  names each end-of-age screen as it comes up and what cleared it, takes the victories screen's Exit and the civ
+  select's Choose (`--civ` picks the civ), clears the new age's loading screen and reports the new age and turn.
+  Watched 2026-10-17 crossing Exploration into Modern and Antiquity into Exploration: "turn 120 -> 1, into the next
+  age", "loading curtain cleared by UI.notifyUIReady()", "into AGE_MODERN, turn 1". Neither game showed the endgame
+  cinematic, the victories screen or the civ select (the game picked the next civ itself), so those steps and `--civ`
+  haven't run in a game yet.
+- `release-check` warns about any hidden folder in a package, any folder whose name starts with a dot, where before it
+  only knew a few editor and CI folders by name.
+- `workshop-upload <file.vdf>` uploads a Workshop item's files, change note and preview image through the running Steam
+  client, as Civilization VII, with no password prompt. The title, description, visibility and tags stay as they are
+  on Steam. Without `--yes` it checks everything and sends nothing, and shows which app made the item. On an item made
+  by steamcmd, Steam still refuses the preview, and the error says why. Needs the new optional `steamworks.js`
+  dependency.
+
 ## [0.2.0] - 2026-10-06
 
 - Writes, game-state actions, undo, recipe steps and the console are refused in a multiplayer (network or hotseat)

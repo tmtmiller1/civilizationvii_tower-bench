@@ -66,6 +66,8 @@ re-read until it `LANDED` in 56 ms.
   left at its defaults; if nothing answers, set `UIDebugger 1` there and relaunch.
 - To change a game (writes, game-state actions, the console in a game): `EnableTuner 1` in `AppOptions.txt`, set before
   the game was launched. The game does not unlock achievements while the tuner is on. Reading works without it.
+- For `workshop-upload` only: the Steam client running and signed in as the Workshop item's owner, and the optional
+  `steamworks.js` package (`npm install` fetches it; every other command runs without it).
 
 ## Inspect and change the game
 
@@ -522,6 +524,30 @@ rows, placeholders a translation uses differently, and font lists that cannot dr
 the mod ships it. `l10n live`, and two rules in `lint`, walk the running UI for visible text that draws as boxes; that
 walk has not been watched in a game.
 
+### Workshop upload with a preview image
+
+```
+node tower-bench.mjs workshop-upload dist/workshop_item.vdf --preview-only --preview dist/preview.png
+node tower-bench.mjs workshop-upload dist/workshop_item_with_preview.vdf --yes
+```
+
+steamcmd can upload a Civilization VII item's files, but a `previewfile` line makes it fail with "Access Denied" and
+roll the whole update back. `workshop-upload` sends the same .vdf through the Steam client instead, running as
+Civilization VII (app 1295660), and sends the image through the Workshop API's own preview call. On an item made by
+steamcmd, Steam refuses that preview too (see "Verified, and how far" and [docs/workshop-preview-plan.md](docs/workshop-preview-plan.md)), and the error says so; the dry run shows which
+app made the item. For those items it's a way to send files and change notes without the password prompt. It reads the
+item's id, content folder, change note and preview from the .vdf (relative paths are taken from the .vdf's folder, as
+steamcmd takes them). `--preview F` sends a different image and `--preview-only` sends just the image. The title,
+description, visibility and tags stay as they are on Steam, even when the .vdf has them, so text you've edited on the
+Workshop page is never overwritten.
+
+Without `--yes` it checks everything and stops before sending: the item id, the content folder and its `.modinfo`,
+the image (PNG, JPG or GIF, up to 1 MB), and that Steam is signed in as the account that owns the item. With `--yes`
+it uploads, then reads the item back from Steam until the update time or preview has changed, and exits 1 if Steam
+took the upload but the item never showed it. It only updates items that already exist; make a new one with steamcmd
+first. You don't need a password or Steam Guard, because it uses the running client's sign-in. Starting up as the game
+takes Steam about 7 seconds, and Steam shows you as playing Civilization VII while it runs.
+
 ## What won: the registry view
 
 ```
@@ -584,6 +610,11 @@ run.
 node tower-bench.mjs lab start --seed 4242 --age AGE_ANTIQUITY
 node tower-bench.mjs lab turns 5
 node tower-bench.mjs lab stop
+node tower-bench.mjs lab start --seed 4242 --setup fast --quick   # quicker test game (see below)
+node tower-bench.mjs lab drive 100 --every 5 --sample reading.js  # one-turn Autoplay from inside the game
+node tower-bench.mjs lab popups clear                             # close what's open, by name
+node tower-bench.mjs lab drive 100 --stop-before-age-end 10       # stop 10 age progress points short of the end
+node tower-bench.mjs lab age-change                               # into the next age without Autoplay
 node tower-bench.mjs lab run my-test.json            # seeded game -> recipe -> restore
 node tower-bench.mjs recipe record > my-test.json     # today's landed writes as a recipe
 node tower-bench.mjs bisect --turns 30 --replicates 2
@@ -592,11 +623,50 @@ node tower-bench.mjs bisect --turns 30 --replicates 2
 **The lab** backs up `Mods.sqlite`, `LocalStorage.sqlite`, `HallofFame.sqlite`, every `*Options*.txt` and
 `Saves/Single/auto`, then starts a Play Now game entirely over CDP from the main menu: no probe mod, no registry
 change. Seeded Play Now games are deterministic. `lab turns` ends turns without Autoplay (Autoplay spends the
-treasury) and refuses to run in any game the lab did not start. `lab stop` quits the game and restores every backed-up
+treasury) and refuses to run in any game the lab did not start. The last turn of an age counts once the next age is
+up and past its loading screen. `lab stop` quits the game and restores every backed-up
 file and every registry flag by path; whatever the test game wrote is moved into the run folder, never deleted. Before
 starting it refuses if the game or another lab or bisect run is running, and warns about enabled probe mods. Set
 `TOWER_BENCH_HARNESS` to a regular expression matching your own test scripts to have them block a start too.
 `lab stop` only quits the game the lab started; any other running game is refused, not killed.
+
+**Quicker test games.** `--setup` sets the game's own setup options at Play Now: `fast` is an abbreviated age,
+friendly independents and Settler difficulty, and single values go after it (`fast,MapSize=MAPSIZE_TINY`). The
+names are the ones in the game's `SetupParameters.xml`. Once the game is up, the lab reads each value back from the
+running game and warns about any it didn't take. A player-level `PlayerDifficulty` set this way reads back on the
+setup screen, but the game still starts at Prince, which is why `fast` uses the game-level `Difficulty`. `--quick`
+writes quick combat, quick movement, no historic-moment animation and no era welcome screens into the option files
+for that game. A setup changes the game, so a run that repeats an earlier default-setup baseline should leave it off.
+
+`lab drive` plays turns with one-turn Autoplay, re-armed by a timer inside the game a second after each turn settles.
+The mods' per-turn work runs every turn (multi-turn Autoplay skips it), and the shell only checks in every five
+seconds. It closes pop-ups before each turn (`--keep` spares named categories, `--no-popups` none), stops when the
+local player is out or a turn doesn't move in `--timeout` seconds, and puts itself back after a new age reloads the
+page. Readings from `--sample` (a file holding one JavaScript expression) and the driver's own lines are printed and
+written to `drive.log` in the run folder. On 2026-10-16 (usual set, Antiquity seed 4242, `--setup fast --quick`) it
+ran 10 turns at 4.2 s a turn with a Partisans pass on every one; a shell loop making one eval call per step took
+11.6 s a turn over the next 10 turns of the same game.
+
+`lab popups` works on the game's display queue (tech and civic pop-ups, narrative events, unlocks, advisor warnings,
+dialogs) and the screens pushed on the ContextManager: `clear` closes them and names each one, `list` shows what's
+open and queued, `suspend` holds new ones back until `resume`.
+
+To cross an age the way a player does, without Autoplay at the change, drive most of the age and step the rest.
+`lab drive <turns> --stop-before-age-end <points>` stops the drive once the age's progress
+(`Game.AgeProgressManager.getCurrentAgeProgressionPoints()`) is within `<points>` of its maximum
+(`getMaxAgeProgressionPoints()`), and says where it stopped. It checks before each turn it starts, but milestones can
+push progress up by more than a point a turn, so leave a margin of 10 or so. If the age still ends inside the drive,
+the drive stops there and says so, rather than driving on into the next age.
+
+`lab age-change` then ends one turn at a time, as `lab turns 1` does, until the age changes. On the way it names each
+screen as it comes up and what cleared it: the endgame cinematic (left to move itself on to the victories screen,
+up to two minutes), the victories screen (the bench takes its Exit, `exitToMainMenu`, and only once the age is over),
+the civ select on the main menu (it chooses `--civ CIVILIZATION_X` if that's offered unlocked, otherwise the
+historical choice, otherwise the first unlocked civ, and starts the age through the screen's own Choose), and the
+new age's loading curtain, cleared with `UI.notifyUIReady()` until `UI.getGameLoadingState()` reads 8. A screen
+that waits for the player gets `--grace` seconds (10) before the bench takes its step, so it shows up in captures.
+The turn isn't sent again while an end-of-age screen is up. It ends with the new age and turn, and gives up after
+`--max-turns` turns (10) without a change or `--timeout` seconds (600) on one turn.
 
 **A recipe** is a test written as JSON: a seed and start age, then steps (`snapshot`, `write`, `turns`, `diff`,
 `expect`, `eval`, `lint`, `sample`, `events`, `await`). Positions can anchor to the local player's first unit with an
@@ -641,6 +711,8 @@ your files are restored after every game.
   browser cannot drive or load the game through it. It serves only its own page and scripts.
 - `deploy` refuses a modinfo that lists a file outside the mod folder, and the bench only connects to a debugger
   socket on this machine.
+- `workshop-upload` only sends with `--yes`, only to an item the signed-in Steam account owns, and leaves the item's
+  title, description, visibility and tags as they are on Steam.
 - The debugger port itself is the game's, not this tool's. While the game runs with it open, anything on the machine
   can reach it.
 
@@ -762,7 +834,7 @@ mods, flagged every statically detectable defect that had been watched blocking 
 none of the 4 watched false flags. Their predictions are not watched; each finding says so. The web UI's Techniques,
 Registry, conflicts and pre-flight views were driven in headless Chrome with no console errors.
 
-**Built and checked offline for the next release, not watched in game:** `dbdiff --files` on real database copies
+**Shipped in 0.2.0 and checked offline, not watched in game:** `dbdiff --files` on real database copies
 (a file against itself shows no change; two copies from different mod sets in about half a second); `game snapshot`
 of 1.5.0 (11,119 files, 488 KB) and `game impact` over the enabled mods, plus a reconstructed 1.4.2 index over 1,247
 published mods whose flags matched the defects found by the earlier analysis (partly circular: the reconstruction
@@ -775,6 +847,18 @@ errors and the bench pointed away from any game. The game-state actions, `cost`,
 `false` and a console read went through the new guard; with `TOWER_BENCH_USER_DIR` pointed at a copy of
 `AppOptions.txt` with the tuner off, the same call was refused before anything reached the game. A real multiplayer or
 hotseat game has not been tried; that refusal is covered by the tests only.
+
+**Checked against Steam, 2026-10-15, Steam client on macOS, upload not watched:** `workshop-upload` without `--yes`
+started as app 1295660, read the signed-in account, matched it to the owner of a real item (Demographics,
+3737200066), and read the item's update time and its empty preview, for both a full .vdf and `--preview-only`. With
+the Steam client closed it stopped with the "is the Steam client running" error. Then `--preview-only --yes` with a
+13 KB PNG: Steam refused it with "access denied", the same as steamcmd, and the item was left as it was. Every one of
+our items was made by steamcmd and has creator app 1295660, while every other Civilization VII item on this machine
+that has a preview (45 of them) has creator app 3688890, which the official tools appear to upload as. The same
+preview-only update run as 3688890 got further: Steam's logs show the image stored ("UGC Upload OK") and then the item
+update failing ("Upload finished for workshop item 3737200066 : Failure"); run as 1295660, the log says "UGC Upload
+Access Denied". So an item made as 1295660 can't take a preview either way, and whether one made as 3688890 can
+hasn't been tried here. Its tests use a fake Steam client.
 
 **NOT verified yet:** the `lab run` command as a whole (its parts ran inside bisect), the Windows default paths, and the
 hint for a land unit sent to water as shown in a live write (its inputs, `GameplayMap.isWater` and the unit's `Domain`,

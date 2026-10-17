@@ -74,6 +74,12 @@ re-read until the change is observed, recorded in an evidence log, and can be un
 
   lab start [--seed N] [--age AGE_X]   back up saves and settings, start a Play Now test game
   lab turns <n>                        end n turns without Autoplay
+  lab drive <n> [--stop-before-age-end P]
+                                       one-turn Autoplay from inside the game; stop P points short
+                                       of the age's end
+  lab age-change [--civ CIVILIZATION_X] [--grace 10] [--max-turns 10]
+                                       end turns without Autoplay into the next age, through the
+                                       end-of-age screens
   lab run <recipe>                     start a seeded test game, run the recipe, restore
   lab stop                             quit the test game and restore everything it touched
   lab status                           the current test run, if any
