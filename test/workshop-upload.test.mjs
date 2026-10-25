@@ -149,3 +149,48 @@ test("a refused update says why, and for an item the game made, that a preview w
     return true;
   });
 });
+
+/** A mod folder with an item id and a tags file. */
+function tagged(lines, id = "3000000001") {
+  const root = tmp("tb-tags-");
+  fs.mkdirSync(path.join(root, "docs"));
+  if (id !== null) fs.writeFileSync(path.join(root, "steam_workshop_id.txt"), `${id}\n`);
+  if (lines !== null) fs.writeFileSync(path.join(root, "docs/steam-workshop-tags.txt"), lines.join("\n"));
+  return root;
+}
+
+test("a tags plan reads the id and the tags, and refuses a tag the Workshop doesn't offer", async () => {
+  const { tagsPlan } = await import("../lib/workshop-upload.mjs");
+  const ok = tagsPlan(tagged(["# a comment", "Mod", "UI", "UI", ""]));
+  assert.deepEqual([ok.itemId, ok.tags, ok.problems], ["3000000001", ["Mod", "UI"], []]);
+  assert.deepEqual(tagsPlan(tagged(["Mod", "Ponies"])).problems, [`"Ponies" isn't one of the Workshop's tags`]);
+  assert.deepEqual(tagsPlan(tagged(["UI"])).problems, [`no "Mod" tag (the Workshop's Type)`]);
+  assert.deepEqual(tagsPlan(tagged(null, null)).problems, ["no steam_workshop_id.txt", "no docs/steam-workshop-tags.txt"]);
+});
+
+test("workshop-tags sends only the tags, as the game's app, and reads them back", async () => {
+  const { tagsPlan, workshopTags } = await import("../lib/workshop-upload.mjs");
+  const { steam, state } = fakeSteam();
+  /** @type {any} */ (state).tags = ["UI"];
+  const base = steam;
+  const withTags = async (/** @type {number} */ app) => {
+    const s = await base(app);
+    const update = s.client.workshop.updateItem;
+    s.client.workshop.updateItem = async (id, u, a) => {
+      /** @type {any} */ (state).tags = u.tags;
+      return update(id, u, a);
+    };
+    return s;
+  };
+  const plan = tagsPlan(tagged(["Mod", "Resources"]));
+  const dry = await workshopTags(plan, { steam: withTags, settleMs: 0 });
+  assert.deepEqual([dry.sent, dry.before, dry.unchanged], [false, ["UI"], false]);
+  assert.equal(state.sent.length, 0, "a dry run sends nothing");
+  const r = await workshopTags(plan, { send: true, steam: withTags, settleMs: 0 });
+  assert.deepEqual([r.sent, r.watched, r.after], [true, true, ["Mod", "Resources"]]);
+  assert.deepEqual(state.sent.map((x) => [x.update, x.app]), [[{ tags: ["Mod", "Resources"] }, 1295660]],
+    "only the tags, as Civilization VII");
+  const again = await workshopTags(plan, { send: true, steam: withTags, settleMs: 0 });
+  assert.deepEqual([again.unchanged, again.sent, state.sent.length], [true, false, 1], "tags already set: nothing sent");
+  assert.ok(state.closed);
+});

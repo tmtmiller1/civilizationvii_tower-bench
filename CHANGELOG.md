@@ -40,6 +40,10 @@ All notable changes to Tower Bench are documented here. This project follows sem
   on Steam. Without `--yes` it checks everything and sends nothing, and shows which app made the item. On an item made
   by steamcmd, Steam still refuses the preview, and the error says why. Needs the new optional `steamworks.js`
   dependency.
+- `workshop-tags <mod-folder...>` sets each item's Workshop tags from the mod's `docs/steam-workshop-tags.txt`, so items
+  uploaded with steamcmd show up under the Workshop's category filters. It checks each tag against the Workshop's
+  own list and sends nothing but the tags. Without `--yes` it shows the tags before and after. Watched 2026-10-25 on
+  16 items.
 
 ## [0.2.0] - 2026-10-06
 

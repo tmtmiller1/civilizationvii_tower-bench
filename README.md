@@ -66,8 +66,8 @@ re-read until it `LANDED` in 56 ms.
   left at its defaults; if nothing answers, set `UIDebugger 1` there and relaunch.
 - To change a game (writes, game-state actions, the console in a game): `EnableTuner 1` in `AppOptions.txt`, set before
   the game was launched. The game does not unlock achievements while the tuner is on. Reading works without it.
-- For `workshop-upload` only: the Steam client running and signed in as the Workshop item's owner, and the optional
-  `steamworks.js` package (`npm install` fetches it; every other command runs without it).
+- For `workshop-upload` and `workshop-tags` only: the Steam client running and signed in as the Workshop item's owner,
+  and the optional `steamworks.js` package (`npm install` fetches it; every other command runs without it).
 
 ## Inspect and change the game
 
@@ -541,6 +541,20 @@ steamcmd takes them). `--preview F` sends a different image and `--preview-only`
 description, visibility and tags stay as they are on Steam, even when the .vdf has them, so text you've edited on the
 Workshop page is never overwritten.
 
+### Workshop tags
+
+```
+node tower-bench.mjs workshop-tags tower_mods/canals tower_mods/dams --yes
+```
+
+Items uploaded with steamcmd get no tags, so they never show under the Workshop's category filters. `workshop-tags`
+sets them through the Steam client, as Civilization VII: for each mod folder it reads the item id from
+`steam_workshop_id.txt` and the tags from `docs/steam-workshop-tags.txt` (one per line, `#` starts a comment), checks
+each tag against the Workshop's own list (`Mod`, the Type tag, must be among them) and sends the tags alone. The files,
+change notes, title and description aren't touched, and no change note is added. It reads the item back until Steam
+shows the new tags. Without `--yes` it shows each item's tags now and what they'd become. Watched 2026-10-25: 16
+items made by steamcmd went from no tags to their own, and Steam's public item API showed them right after.
+
 Without `--yes` it checks everything and stops before sending: the item id, the content folder and its `.modinfo`,
 the image (PNG, JPG or GIF, up to 1 MB), and that Steam is signed in as the account that owns the item. With `--yes`
 it uploads, then reads the item back from Steam until the update time or preview has changed, and exits 1 if Steam
@@ -713,6 +727,8 @@ your files are restored after every game.
   socket on this machine.
 - `workshop-upload` only sends with `--yes`, only to an item the signed-in Steam account owns, and leaves the item's
   title, description, visibility and tags as they are on Steam.
+- `workshop-tags` only sends with `--yes`, only to an item the signed-in Steam account owns, only tags from the
+  Workshop's own list, and nothing besides the tags.
 - The debugger port itself is the game's, not this tool's. While the game runs with it open, anything on the machine
   can reach it.
 
