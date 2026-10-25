@@ -4,6 +4,8 @@ All notable changes to Tower Bench are documented here. This project follows sem
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-25
+
 - `lab start --setup fast` starts the test game with an abbreviated age, friendly independents and Settler difficulty,
   so an idle test player keeps its city and the age ends sooner. Single values work too
   (`--setup fast,MapSize=MAPSIZE_TINY`). After the game starts, the lab reads each value back from the running game
