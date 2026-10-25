@@ -8,6 +8,8 @@ import { applyQuickOptions, pageAgeScreens, pageDriveStart, pageDriveStop, pageP
 
 test("setup specs expand presets and route player parameters to the player", () => {
   assert.equal(parseSetup(undefined), null);
+  // A mod's own setup parameter can carry a hyphen in its id (Emigration's EMIG-AiStrategy).
+  assert.equal(parseSetup("EMIG-AiStrategy=EMIG_AI_STRATEGY_OFF").game["EMIG-AiStrategy"], "EMIG_AI_STRATEGY_OFF");
   const s = parseSetup("fast,MapSize=MAPSIZE_TINY,PlayerDifficulty=DIFFICULTY_KING");
   assert.equal(s.game.AgeLength, "AGE_LENGTH_ABBREVIATED");
   assert.equal(s.game.MapSize, "MAPSIZE_TINY");

@@ -4,6 +4,9 @@ All notable changes to Tower Bench are documented here. This project follows sem
 
 ## [Unreleased]
 
+- `lab start --setup` takes a mod's own setup parameter whose id has a hyphen in it, such as Emigration's
+  `EMIG-AiStrategy=EMIG_AI_STRATEGY_OFF`. It used to refuse the value as a bad setup value.
+
 ## [0.3.0] - 2026-10-25
 
 - `lab start --setup fast` starts the test game with an abbreviated age, friendly independents and Settler difficulty,
