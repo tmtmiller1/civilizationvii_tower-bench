@@ -59,6 +59,26 @@ test("restore undoes everything a test game writes, and deletes nothing", () => 
   assert.deepEqual(rep.crashReports.filter((f) => !f.includes("CivilizationVII")), []);
 });
 
+test("a backed-up file the test game created is moved aside, and one the player had is put back", () => {
+  const { user, paths } = sandbox();
+  const lab = new Lab(paths, { pid: () => null });
+  const run = path.join(user, "run");
+  const hof = path.join(user, "demographics-halloffame.sqlite");
+  lab.backup(run);
+  execFileSync("sqlite3", [hof, "CREATE TABLE HallOfFame(Id INTEGER PRIMARY KEY, Payload TEXT); INSERT INTO HallOfFame VALUES (1, 'test game');"]);
+  const rep = lab.restore(run);
+  assert.ok(!fs.existsSync(hof), "the player had no file, so none is left behind");
+  assert.ok(fs.existsSync(path.join(run, "written-by-test-game", "demographics-halloffame.sqlite")), "moved, not deleted");
+  assert.ok(rep.moved.includes("demographics-halloffame.sqlite"));
+
+  execFileSync("sqlite3", [hof, "CREATE TABLE HallOfFame(Id INTEGER PRIMARY KEY, Payload TEXT); INSERT INTO HallOfFame VALUES (1, 'player');"]);
+  const run2 = path.join(user, "run2");
+  lab.backup(run2);
+  execFileSync("sqlite3", [hof, "UPDATE HallOfFame SET Payload = 'test game';"]);
+  lab.restore(run2);
+  assert.equal(execFileSync("sqlite3", [hof, "SELECT Payload FROM HallOfFame"], { encoding: "utf8" }).trim(), "player");
+});
+
 test("restore refuses while the game is running is enforced by gamePid, and backup survives a missing autosave folder", () => {
   const { user, paths } = sandbox();
   fs.rmSync(path.join(user, "Saves"), { recursive: true });
